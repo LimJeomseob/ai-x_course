@@ -23,7 +23,9 @@
 ```
 supabase/migrations/   0001 스키마·트리거·RPC·RLS / 0002 시드 / 0003 레거시 대장 70건 / 0004 수료증 서식
 seed/legacy_certificates.csv          레거시 발급대장 원본(UTF-8 BOM)
+supabase/setup_all.sql                migrations 0001~0004 단일 실행 파일(SQL Editor용)
 scripts/generate_legacy_seed.py       CSV → 0003 마이그레이션 생성(npm run seed:legacy)
+scripts/build_setup_sql.py            migrations → setup_all.sql 생성(npm run build:setup-sql)
 src/app/(portal)/*                    공개 포털 5탭
 src/app/admin/*                       관리자 포털
 src/app/api/*                         Route Handler(본인확인·취소·공개 발급·관리자 API·Cron)
@@ -52,7 +54,9 @@ M2(상태 변경)는 관리자 상태변경 API 성공 직후 발송. `email_log
 
 ## 배포 절차
 
-1. Supabase 신규 프로젝트 생성 → `supabase/migrations/*.sql`을 순서대로 실행(SQL Editor 또는 `supabase db push`)
+1. Supabase 신규 프로젝트 생성 → SQL Editor에 **`supabase/setup_all.sql`** 전체를 붙여넣고 1회 실행
+   (migrations 0001~0004를 하나의 트랜잭션으로 합친 파일, 마지막 확인 쿼리 기대값: 4 / 7 / 70 / 70 / 1 / 5 / eros4424@gmail.com).
+   CLI 사용 시에는 `supabase db push`로 `supabase/migrations/`를 적용한다. migrations 수정 후에는 `npm run build:setup-sql`로 재생성
 2. Supabase Auth → Google Provider 활성화, Site URL·Redirect URLs에 Vercel 도메인(`https://<project>.vercel.app/admin/login`) 등록
 3. Vercel에 `LimJeomseob/ai-x_course` Git 연동 → 환경변수 등록(`.env.example` 참고)
    - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
