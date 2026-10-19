@@ -26,6 +26,7 @@ seed/legacy_certificates.csv          레거시 발급대장 원본(UTF-8 BOM)
 supabase/setup/step1~4_*.sql          SQL Editor 실행용 4단계 파일(migrations 0001~0004와 동일 내용)
 scripts/generate_legacy_seed.py       CSV → 0003 마이그레이션 생성(npm run seed:legacy)
 scripts/build_setup_sql.py            migrations → setup/step1~4 생성(npm run build:setup-sql)
+scripts/build_og_image.py             public/brand/gnu-logo.png → 링크 미리보기(public/og-image.png)·파비콘(src/app/icon.png 등) 생성(npm run build:og)
 src/app/(portal)/*                    공개 포털 5탭
 src/app/admin/*                       관리자 포털
 src/app/api/*                         Route Handler(본인확인·취소·공개 발급·관리자 API·Cron)
