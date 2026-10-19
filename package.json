@@ -9,7 +9,9 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "seed:legacy": "python3 scripts/generate_legacy_seed.py seed/legacy_certificates.csv supabase/migrations/0003_legacy_certificates.sql"
+    "seed:legacy": "python3 scripts/generate_legacy_seed.py seed/legacy_certificates.csv supabase/migrations/0003_legacy_certificates.sql",
+    "build:setup-sql": "python3 scripts/build_setup_sql.py",
+    "build:og": "python3 scripts/build_og_image.py"
   },
   "dependencies": {
     "@pdf-lib/fontkit": "^1.1.1",

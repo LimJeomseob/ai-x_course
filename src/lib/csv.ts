@@ -43,7 +43,8 @@ export function downloadCsv(filename: string, csvContent: string): void {
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
-  URL.revokeObjectURL(url);
+  // 즉시 해제하면 일부 브라우저에서 파일명(download 속성)이 적용되기 전에 URL이 사라진다.
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 /** rows를 CSV로 변환 후 즉시 다운로드하는 편의 함수. */

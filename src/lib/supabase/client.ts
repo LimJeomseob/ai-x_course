@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { supabaseUrl } from "./url";
 
 let browserClient: SupabaseClient | null = null;
 
@@ -11,7 +12,7 @@ export function createSupabaseBrowserClient(): SupabaseClient {
   if (browserClient) return browserClient;
 
   browserClient = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    supabaseUrl(),
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       auth: {
