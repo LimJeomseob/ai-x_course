@@ -202,7 +202,7 @@ AI-X 워크숍 포털
 
 ### 6.1 인증 · 보안
 
-- Supabase Auth Google OAuth + `admin_users` allowlist(초기: `eros4424@gmail.com`, superadmin) + RLS `is_admin()`. 미인증·비허용 시 `/admin/login`으로 리다이렉트
+- Supabase Auth Google OAuth + `admin_users` allowlist(초기: `eros4424@gmail.com` superadmin, `ssh850920@gmail.com` admin) + RLS `is_admin()`. 미인증·비허용 시 `/admin/login`으로 리다이렉트
 
 ### 6.2 신청자 관리
 

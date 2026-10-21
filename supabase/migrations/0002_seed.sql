@@ -57,7 +57,9 @@ from (values
 join public.workshop_days d on d.day_code = s.day_code;
 
 insert into public.admin_users (email, role)
-values ('eros4424@gmail.com', 'superadmin')
+values
+  ('eros4424@gmail.com', 'superadmin'),
+  ('ssh850920@gmail.com', 'admin')
 on conflict (email) do nothing;
 
 insert into public.email_settings (id) values (1) on conflict (id) do nothing;
