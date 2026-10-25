@@ -71,9 +71,17 @@ M2(상태 변경)는 관리자 상태변경 API 성공 직후 발송. `email_log
    - `NEXT_PUBLIC_SITE_URL`, `GMAIL_USER` + (`GMAIL_CLIENT_ID`/`GMAIL_CLIENT_SECRET`/`GMAIL_REFRESH_TOKEN` 또는 `GMAIL_APP_PASSWORD`), `CRON_SECRET`
 4. 배포 후 `/admin/emails` → 테스트 발송으로 Gmail 연동 확인, `/admin/sessions`에서 3차 Zoom 링크·5차 사전학습 URL 입력
 
+## 런타임 보안(CVE-2026-111497, Brotli 디코더 RCE)
+
+- Node.js **22.23.4 이상**(또는 24.22.1 이상)만 사용한다. 20.x 이하는 EOL이라 수정판이 없다.
+- `package.json`의 `engines.node = "22.x"`로 Vercel 런타임을 22.x에 고정했다(Vercel이 패치 버전을 자동 관리).
+  빌드 로그 첫 줄의 `node -v` 출력으로 실제 배포 버전을 확인한다.
+- 로컬은 `.nvmrc`(22.23.4) 기준 — `nvm use`. 점검 기록: `docs/security/CVE-2026-111497_점검보고.md`
+
 ## 로컬 개발
 
 ```bash
+nvm use                      # .nvmrc = 22.23.4 (CVE-2026-111497 수정판)
 npm install
 cp .env.example .env.local   # 값 입력
 npm run dev
