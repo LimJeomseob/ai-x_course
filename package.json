@@ -4,7 +4,7 @@
   "private": true,
   "description": "경상국립대학교 글로컬대학30 「AI-X 교과목 개발·인증을 위한 AI 활용 역량 강화 워크숍」 신청·관리 포털",
   "engines": {
-    "node": "22.x"
+    "node": "24.x"
   },
   "scripts": {
     "dev": "next dev",

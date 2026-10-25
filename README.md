@@ -73,15 +73,15 @@ M2(상태 변경)는 관리자 상태변경 API 성공 직후 발송. `email_log
 
 ## 런타임 보안(CVE-2026-111497, Brotli 디코더 RCE)
 
-- Node.js **22.23.4 이상**(또는 24.22.1 이상)만 사용한다. 20.x 이하는 EOL이라 수정판이 없다.
-- `package.json`의 `engines.node = "22.x"`로 Vercel 런타임을 22.x에 고정했다(Vercel이 패치 버전을 자동 관리).
+- Node.js **24.22.1 이상**(또는 22.23.4 이상)만 사용한다. 20.x 이하는 EOL이라 수정판이 없다.
+- `package.json`의 `engines.node = "24.x"`로 Vercel 런타임을 24.x에 고정했다(대시보드 설정과 동일, Vercel이 패치 버전을 자동 관리).
   빌드 로그 첫 줄의 `node -v` 출력으로 실제 배포 버전을 확인한다.
-- 로컬은 `.nvmrc`(22.23.4) 기준 — `nvm use`. 점검 기록: `docs/security/CVE-2026-111497_점검보고.md`
+- 로컬은 `.nvmrc`(24.22.1) 기준 — `nvm use`. 점검 기록: `docs/security/CVE-2026-111497_점검보고.md`
 
 ## 로컬 개발
 
 ```bash
-nvm use                      # .nvmrc = 22.23.4 (CVE-2026-111497 수정판)
+nvm use                      # .nvmrc = 24.22.1 (CVE-2026-111497 수정판)
 npm install
 cp .env.example .env.local   # 값 입력
 npm run dev
