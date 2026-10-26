@@ -1,8 +1,8 @@
 -- ============================================================================
--- [1/4단계] 스키마 생성(테이블·트리거·RPC·RLS·Storage 버킷)
+-- [1/5단계] 스키마 생성(테이블·트리거·RPC·RLS·Storage 버킷)
 -- 원본: supabase/migrations/0001_init.sql (자동 생성: scripts/build_setup_sql.py — 직접 수정 금지)
 -- 실행: Supabase 대시보드 > SQL Editor > New query > 이 파일 전체 붙여넣기 > Run
--- 순서: step1 → step2 → step3 → step4 (반드시 번호 순서, 각 파일 1회만)
+-- 순서: step1 → step2 → step3 → step4 → step5 (반드시 번호 순서, 각 파일 1회만)
 -- 오류 시 이 단계만 전부 롤백되므로 원인 수정 후 같은 파일을 다시 실행하면 된다.
 -- ============================================================================
 
@@ -79,7 +79,7 @@ create table public.workshops (
   start_at timestamptz not null,
   end_at timestamptz not null,
   order_in_day int not null default 1,
-  capacity int not null check (capacity > 0),    -- 대면 25 / 온라인 9999(제한 없음)
+  capacity int not null check (capacity > 0),    -- 대면 30 / 온라인 9999(제한 없음)
   deadline timestamptz not null,                 -- 운영일 KST 전날 23:59:59 (D-1)
   apply_open_at timestamptz not null default '2026-10-21T09:00:00+09:00',
   notes text not null default '',                -- 세션별 추가 협조사항

@@ -1,4 +1,4 @@
-# supabase/migrations/*.sql → supabase/setup/step1~4_*.sql (Supabase SQL Editor 실행용 4개 파일) 생성
+# supabase/migrations/*.sql → supabase/setup/step1~N_*.sql (Supabase SQL Editor 실행용 단계별 파일) 생성
 #   사용법: python3 scripts/build_setup_sql.py   (또는 npm run build:setup-sql)
 # 각 단계 파일은 트랜잭션으로 감싸 오류 시 그 단계만 전부 롤백되고, 끝에 결과 확인 쿼리가 붙는다.
 import pathlib
@@ -52,16 +52,30 @@ STEPS = [
             "group by template;",
         ],
     },
+    {
+        "src": "0005_capacity_30.sql",
+        "out": "step5_capacity_30.sql",
+        "title": "대면 세션 모집정원 증원(25 → 30명, 온라인 3차 제외)",
+        "check": [
+            "select",
+            "  count(*) filter (where capacity = 30) as 대면30명_기대값_6,",
+            "  count(*) filter (where capacity >= 9999) as 온라인_기대값_1",
+            "from public.workshops;",
+        ],
+    },
 ]
+
+TOTAL = len(STEPS)
+ORDER = " → ".join(f"step{n}" for n in range(1, TOTAL + 1))
 
 for i, step in enumerate(STEPS, start=1):
     body = (src_dir / step["src"]).read_text(encoding="utf-8").rstrip()
     lines = [
         "-- ============================================================================",
-        f"-- [{i}/4단계] {step['title']}",
+        f"-- [{i}/{TOTAL}단계] {step['title']}",
         f"-- 원본: supabase/migrations/{step['src']} (자동 생성: scripts/build_setup_sql.py — 직접 수정 금지)",
         "-- 실행: Supabase 대시보드 > SQL Editor > New query > 이 파일 전체 붙여넣기 > Run",
-        "-- 순서: step1 → step2 → step3 → step4 (반드시 번호 순서, 각 파일 1회만)"
+        f"-- 순서: {ORDER} (반드시 번호 순서, 각 파일 1회만)"
         + (f" · 실행 전 step{i - 1} 완료 필요" if i > 1 else ""),
         "-- 오류 시 이 단계만 전부 롤백되므로 원인 수정 후 같은 파일을 다시 실행하면 된다.",
         "-- ============================================================================",

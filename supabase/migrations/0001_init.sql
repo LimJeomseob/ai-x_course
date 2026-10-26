@@ -69,7 +69,7 @@ create table public.workshops (
   start_at timestamptz not null,
   end_at timestamptz not null,
   order_in_day int not null default 1,
-  capacity int not null check (capacity > 0),    -- 대면 25 / 온라인 9999(제한 없음)
+  capacity int not null check (capacity > 0),    -- 대면 30 / 온라인 9999(제한 없음)
   deadline timestamptz not null,                 -- 운영일 KST 전날 23:59:59 (D-1)
   apply_open_at timestamptz not null default '2026-10-21T09:00:00+09:00',
   notes text not null default '',                -- 세션별 추가 협조사항

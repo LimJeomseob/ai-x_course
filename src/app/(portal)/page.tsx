@@ -89,7 +89,7 @@ export default function IntroPage() {
           <h2 id="sessions-title" className="text-xl font-bold text-slate-900">
             운영일·세션 안내
           </h2>
-          <p className="text-sm text-slate-500">세션(차시)별 선착순 신청 · 대면 세션별 정원 25명</p>
+          <p className="text-sm text-slate-500">세션(차시)별 선착순 신청 · 대면 세션별 정원 30명</p>
         </div>
         <div className="mt-4">
           <ProgramCards />

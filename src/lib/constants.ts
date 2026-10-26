@@ -33,7 +33,7 @@ export const OVERVIEW_ITEMS: { label: string; value: string }[] = [
   { label: "운영대상", value: "AI-X 교과목 개발·인증 신청 교원 및 희망 교원" },
   { label: "신청기간", value: "’26. 10. 21.(수) ~ 운영 D-1일 (시스템 신청)" },
   { label: "운영일시", value: "’26. 11. 5.(목) ~ 11. 20.(금) (총 7회 · 7개 세션)" },
-  { label: "모집인원", value: "대면 워크숍 150명(6세션 × 25명), 비대면 온라인 특강(제한 없음)" },
+  { label: "모집인원", value: "대면 워크숍 180명(6세션 × 30명), 비대면 온라인 특강(제한 없음)" },
   { label: "운영방법", value: "실습형 대면(비대면) 워크숍" },
   { label: "신청방법", value: "교육신청 시스템을 통한 세션별 선택 신청(선착순)" },
   { label: "지원사항", value: "Claude·ChatGPT 등 유료계정 사용" },

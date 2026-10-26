@@ -142,7 +142,7 @@ export function buildM1Vars(recipient: MailRecipient, sessions: MailSession[]): 
       세션목록표: table.text,
       정원대기안내: hasWaiting
         ? "대기 상태인 세션은 결원 발생 시 순차적으로 안내드립니다."
-        : "세션별 정원(대면 25명, 온라인 제한 없음) 내 선착순으로 접수되었습니다.",
+        : "세션별 정원(대면 30명, 온라인 제한 없음) 내 선착순으로 접수되었습니다.",
       협조사항: notes,
       취소방법: CANCEL_GUIDE,
     },
