@@ -39,6 +39,8 @@ export interface Workshop {
   end_at: string;
   order_in_day: number;
   capacity: number;
+  /** 정원 초과 시 추가 접수하는 대기자 한도(대면 5 / 온라인 0) */
+  waitlist_capacity: number;
   deadline: string;
   apply_open_at: string;
   notes: string;
@@ -106,6 +108,8 @@ export interface ApplySessionResult {
   topic?: string;
   ok: boolean;
   application_id?: string;
+  /** ok=true일 때 접수 상태: 정원 내 '신청완료' 또는 정원 초과 '대기' */
+  status?: ApplicationStatus;
   code?: string;
   message?: string;
 }

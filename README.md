@@ -21,11 +21,12 @@
 ## 구조
 
 ```
-supabase/migrations/   0001 스키마·트리거·RPC·RLS / 0002 시드 / 0003 레거시 대장 70건 / 0004 수료증 서식 / 0005 대면 정원 25→30명 증원
+supabase/migrations/   0001 스키마·트리거·RPC·RLS / 0002 시드 / 0003 레거시 대장 70건 / 0004 수료증 서식
+                       / 0005 대면 정원 25→30명 증원 / 0006 세션별 대기자 5명 접수 + 결원 시 자동 승급
 seed/legacy_certificates.csv          레거시 발급대장 원본(UTF-8 BOM)
-supabase/setup/step1~5_*.sql          SQL Editor 실행용 5단계 파일(migrations 0001~0005와 동일 내용)
+supabase/setup/step1~6_*.sql          SQL Editor 실행용 6단계 파일(migrations 0001~0006과 동일 내용)
 scripts/generate_legacy_seed.py       CSV → 0003 마이그레이션 생성(npm run seed:legacy)
-scripts/build_setup_sql.py            migrations → setup/step1~5 생성(npm run build:setup-sql)
+scripts/build_setup_sql.py            migrations → setup/step1~6 생성(npm run build:setup-sql)
 scripts/build_og_image.py             public/brand/gnu-logo.png → 링크 미리보기(public/og-image.png)·파비콘(src/app/icon.png 등) 생성(npm run build:og)
 src/app/(portal)/*                    공개 포털 5탭
 src/app/admin/*                       관리자 포털
@@ -36,7 +37,9 @@ src/lib/email/*                       Gmail 발송·템플릿·M1~M5 발송 서�
 ## 주요 규칙(PRD §8)
 
 - 신청 오픈 2026-10-21 09:00 KST, 마감 = 운영일 전날 23:59:59 KST
-- DB 트리거 검사 순서: 오픈 전(P0004) → 마감(P0002) → 정원(P0003) → 동일 세션 중복(P0005, 연락처 또는 식별번호)
+- DB 트리거 검사 순서: 오픈 전(P0004) → 마감(P0002) → 동일 세션 중복(P0005, 연락처 또는 식별번호) → 정원
+  (정원 30명 초과 시 세션별 `waitlist_capacity`(대면 5명)까지 '대기'로 접수, 대기도 차면 P0003)
+- 결원 발생 시(본인 취소·관리자 상태변경으로 신청완료 건이 취소·대기가 되면) `promote_waitlist()`가 접수 순서대로 대기 → 신청완료 자동 승급 + M2 발송
 - 관리자 대리등록은 검사 생략(중복은 화면 confirm)
 - 발급번호 `제YYYY-NNN호` — 레거시 ∪ 신규 최대값 + 1 → 첫 신규 발급 `제2026-071호`, 999 초과 시 자릿수 확장
 - `zoom_link`·`prelearning_url`은 공개 역할에 컬럼 SELECT 권한 없음(메일로만 발송)
@@ -55,7 +58,7 @@ M2(상태 변경)는 관리자 상태변경 API 성공 직후 발송. `email_log
 
 ## 배포 절차
 
-1. Supabase 신규 프로젝트 생성 → SQL Editor에서 `supabase/setup/`의 5개 파일을 **번호 순서대로 1회씩** 실행
+1. Supabase 신규 프로젝트 생성 → SQL Editor에서 `supabase/setup/`의 6개 파일을 **번호 순서대로 1회씩** 실행
    | 순서 | 파일 | 확인 쿼리 기대값 |
    | --- | --- | --- |
    | 1 | `step1_schema.sql` | 테이블 11 |
@@ -63,10 +66,13 @@ M2(상태 변경)는 관리자 상태변경 API 성공 직후 발송. `email_log
    | 3 | `step3_legacy_certificates.sql` | 레거시 70 · 최대번호 70 |
    | 4 | `step4_certificate_template.sql` | 서식 1 · 이미지 2 |
    | 5 | `step5_capacity_30.sql` | 대면 30명 세션 6 · 온라인 1 |
+   | 6 | `step6_waitlist.sql` | 대면 대기 5명 세션 6 · 온라인 대기 0 세션 1 · 승급 함수 1 |
 
    각 파일은 트랜잭션이라 오류 시 해당 단계만 롤백된다. CLI 사용 시에는 `supabase db push`(`supabase/migrations/` 적용).
-   migrations 수정 후에는 `npm run build:setup-sql`로 5개 파일을 재생성한다.
-   **이미 운영 중인 DB**(step1~4 실행 완료 상태)에는 `step5_capacity_30.sql`만 1회 실행하면 대면 6세션 정원이 25→30명으로 갱신된다(멱등).
+   migrations 수정 후에는 `npm run build:setup-sql`로 6개 파일을 재생성한다.
+   **이미 운영 중인 DB**에는 아직 실행하지 않은 단계만 번호 순서대로 1회씩 실행한다
+   (예: step1~4 완료 상태면 `step5_capacity_30.sql` → `step6_waitlist.sql`). step6은 공개 컬럼 grant·RPC 반환 형식을 바꾸므로
+   **step6 실행과 같은 시점에 코드도 배포**해야 포털의 정원현황·대기 표시가 정상 동작한다.
 2. Supabase Auth → Google Provider 활성화, Site URL·Redirect URLs에 Vercel 도메인(`https://<project>.vercel.app/admin/login`) 등록
 3. Vercel에 `LimJeomseob/ai-x_course` Git 연동 → 환경변수 등록(`.env.example` 참고)
    - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`

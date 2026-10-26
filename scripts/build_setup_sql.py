@@ -63,6 +63,18 @@ STEPS = [
             "from public.workshops;",
         ],
     },
+    {
+        "src": "0006_waitlist.sql",
+        "out": "step6_waitlist.sql",
+        "title": "세션별 대기자 5명 접수 + 결원 시 자동 승급(트리거·RPC·정원현황·승급 함수)",
+        "check": [
+            "select",
+            "  count(*) filter (where waitlist_capacity = 5) as 대면대기5명_기대값_6,",
+            "  count(*) filter (where waitlist_capacity = 0) as 온라인대기0_기대값_1,",
+            "  (select count(*) from pg_proc where proname = 'promote_waitlist') as 승급함수_기대값_1",
+            "from public.workshops;",
+        ],
+    },
 ]
 
 TOTAL = len(STEPS)

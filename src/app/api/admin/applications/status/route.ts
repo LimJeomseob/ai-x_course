@@ -1,10 +1,12 @@
 // 관리자 상태 변경(단건·일괄) + M2 상태 변경 안내 즉시 발송(PRD §6.2, §9.2)
+// 신청완료·이수 → 취소·대기로 자리가 비면 해당 세션의 대기자를 자동 승급한다(승급자 M2는 notify와 무관하게 발송).
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createServiceClient, verifyAdminRequest } from "@/lib/supabase/server";
 import { jsonError } from "@/lib/api";
 import { sendStatusChangeNotices } from "@/lib/email/service";
 import { APPLICATION_STATUSES } from "@/lib/types";
+import { freesSeat, promoteWaitlists } from "@/lib/waitlist";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,14 +27,15 @@ export async function POST(req: Request) {
   const db = createServiceClient();
   const { data: current, error } = await db
     .from("applications")
-    .select("id, status")
+    .select("id, status, workshop_id")
     .in("id", ids)
-    .returns<{ id: string; status: string }[]>();
+    .returns<{ id: string; status: string; workshop_id: string }[]>();
   if (error) return jsonError("신청 건 조회에 실패했습니다.", 500);
 
   const targets = (current ?? []).filter((row) => row.status !== status);
   const changed: { applicationId: string; from: string; to: string }[] = [];
   const failures: { id: string; error: string }[] = [];
+  const freedWorkshopIds = new Set<string>();
 
   // 행 단위로 갱신해 중복 제약(동일 세션 활성 신청) 위반 건만 실패로 남긴다.
   for (const row of targets) {
@@ -51,6 +54,7 @@ export async function POST(req: Request) {
       });
     } else {
       changed.push({ applicationId: row.id, from: row.status, to: status });
+      if (freesSeat(row.status, status)) freedWorkshopIds.add(row.workshop_id);
     }
   }
 
@@ -62,5 +66,7 @@ export async function POST(req: Request) {
     messages: [e.message],
   })) : null;
 
-  return NextResponse.json({ updated: changed.length, unchanged: ids.length - targets.length, failures, mail });
+  const promoted = await promoteWaitlists(db, freedWorkshopIds);
+
+  return NextResponse.json({ updated: changed.length, unchanged: ids.length - targets.length, failures, mail, promoted });
 }

@@ -21,7 +21,7 @@ export const CERTIFICATES_BUCKET = "certificates";
  * 없으므로(0001_init.sql) select("*")를 쓰면 권한 오류가 난다 — 반드시 이 목록을 사용한다.
  */
 export const WORKSHOP_PUBLIC_COLUMNS =
-  "id, day_id, round, round_label, topic, contents, start_at, end_at, order_in_day, capacity, deadline, apply_open_at, notes, created_at";
+  "id, day_id, round, round_label, topic, contents, start_at, end_at, order_in_day, capacity, waitlist_capacity, deadline, apply_open_at, notes, created_at";
 
 /** applications 임베드용 세션 요약 컬럼 */
 export const WORKSHOP_SUMMARY_SELECT =

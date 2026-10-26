@@ -20,6 +20,7 @@ const PHASE_CLASSES: Record<SessionPhase, string> = {
   "확인 중": "bg-slate-100 text-slate-600",
   "신청 예정": "bg-violet-100 text-violet-800",
   모집중: "bg-emerald-100 text-emerald-800",
+  대기접수: "bg-amber-100 text-amber-800",
   마감: "bg-slate-200 text-slate-600",
 };
 

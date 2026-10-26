@@ -1,10 +1,12 @@
 // 본인 신청 취소(PRD §5.3) — 성명+연락처 본인확인 후 세션 신청 건을 '취소'로 변경(행 삭제 없음).
-// '취소'는 정원 집계에서 제외되므로 즉시 자리가 반환된다. 세션 시작 이후·이수 건은 취소 불가.
+// '취소'는 정원 집계에서 제외되므로 즉시 자리가 반환되고, 신청완료 건 취소 시 대기 1순위가 자동 승급된다(M2 발송).
+// 세션 시작 이후·이수 건은 취소 불가.
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createServiceClient } from "@/lib/supabase/server";
 import { jsonError, normalizePhone, PHONE_REGEX } from "@/lib/api";
 import { loadSettings, sendStatusChangeNotices } from "@/lib/email/service";
+import { freesSeat, promoteWaitlist } from "@/lib/waitlist";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -26,9 +28,16 @@ export async function POST(req: Request) {
 
   const { data: app, error } = await db
     .from("applications")
-    .select("id, name, phone_digits, status, workshop:workshops(start_at)")
+    .select("id, name, phone_digits, status, workshop_id, workshop:workshops(start_at)")
     .eq("id", applicationId)
-    .maybeSingle<{ id: string; name: string; phone_digits: string; status: string; workshop: { start_at: string } | null }>();
+    .maybeSingle<{
+      id: string;
+      name: string;
+      phone_digits: string;
+      status: string;
+      workshop_id: string;
+      workshop: { start_at: string } | null;
+    }>();
 
   if (error) return jsonError("조회 중 오류가 발생했습니다.", 500);
 
@@ -61,5 +70,8 @@ export async function POST(req: Request) {
     await sendStatusChangeNotices(db, [{ applicationId, from: app.status, to: "취소" }]).catch(() => null);
   }
 
-  return NextResponse.json({ ok: true, applicationId, status: "취소" });
+  // 신청완료 건 취소로 자리가 비면 대기자 자동 승급(승급자 M2는 설정과 무관하게 발송)
+  const promoted = freesSeat(app.status, "취소") ? await promoteWaitlist(db, app.workshop_id) : [];
+
+  return NextResponse.json({ ok: true, applicationId, status: "취소", promoted: promoted.length });
 }

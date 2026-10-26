@@ -141,8 +141,8 @@ export function buildM1Vars(recipient: MailRecipient, sessions: MailSession[]): 
       신청건수: String(sessions.length),
       세션목록표: table.text,
       정원대기안내: hasWaiting
-        ? "대기 상태인 세션은 결원 발생 시 순차적으로 안내드립니다."
-        : "세션별 정원(대면 30명, 온라인 제한 없음) 내 선착순으로 접수되었습니다.",
+        ? "대기 상태인 세션은 결원 발생 시 접수 순서대로 자동 전환되며, 전환 시 메일로 안내드립니다."
+        : "세션별 정원(대면 30명·대기 5명, 온라인 제한 없음) 내 선착순으로 접수되었습니다.",
       협조사항: notes,
       취소방법: CANCEL_GUIDE,
     },
@@ -157,6 +157,15 @@ export function buildM2Vars(recipient: MailRecipient, changes: StatusChange[]): 
     return values.length === 1 ? values[0] : values.join("·");
   };
   const toStatuses = Array.from(new Set(sorted.map((c) => c.to)));
+  // 대기 → 신청완료는 결원 자동 승급(또는 관리자 승급)이므로 일반 '정상 접수' 문구 대신 전환 안내를 쓴다.
+  const promoted = sorted.some((c) => c.from === "대기" && c.to === "신청완료");
+  const notices = toStatuses
+    .map((s) =>
+      s === "신청완료" && promoted
+        ? "결원이 발생하여 대기에서 신청완료로 전환되었습니다. 운영 안내 메일은 일정에 따라 발송됩니다."
+        : STATUS_MESSAGES[s] ?? ""
+    )
+    .filter(Boolean);
   const html = `<table style="border-collapse:collapse;width:100%;margin:12px 0">
 <thead><tr><th ${TH}>차수</th><th ${TH}>주제</th><th ${TH}>일시</th><th ${TH}>변경 전</th><th ${TH}>변경 후</th></tr></thead>
 <tbody>${sorted
@@ -181,7 +190,7 @@ export function buildM2Vars(recipient: MailRecipient, changes: StatusChange[]): 
       일시: uniform((c) => formatSessionDateTime(c.session.startAt, c.session.endAt)),
       변경전상태: uniform((c) => c.from),
       변경후상태: toStatuses.length === 1 ? toStatuses[0] : "변경",
-      안내문: toStatuses.map((s) => STATUS_MESSAGES[s] ?? "").filter(Boolean).join("\n"),
+      안내문: notices.join("\n"),
       변경목록표: text,
     },
     html: { 변경목록표: html },

@@ -266,7 +266,12 @@ export function ApplicantsTable() {
   const ids = selectedRows.map((r) => r.id);
   const counts = useMemo(() => {
     const active = rows.filter((r) => r.status === "신청완료" || r.status === "이수");
-    return { total: rows.length, active: active.length, completed: rows.filter((r) => r.status === "이수").length };
+    return {
+      total: rows.length,
+      active: active.length,
+      waiting: rows.filter((r) => r.status === "대기").length,
+      completed: rows.filter((r) => r.status === "이수").length,
+    };
   }, [rows]);
 
   return (
@@ -275,7 +280,8 @@ export function ApplicantsTable() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">신청자 관리</h1>
           <p className="mt-1 text-sm text-slate-500">
-            전체 {counts.total}건 · 유효(신청완료+이수) {counts.active}건 · 이수 {counts.completed}건 · 표시 {filtered.length}건
+            전체 {counts.total}건 · 유효(신청완료+이수) {counts.active}건 · 대기 {counts.waiting}건 · 이수 {counts.completed}건 · 표시{" "}
+            {filtered.length}건
           </p>
         </div>
         <div className="flex flex-wrap gap-2">

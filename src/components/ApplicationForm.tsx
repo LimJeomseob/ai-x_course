@@ -12,13 +12,13 @@ import { AXIS_OPTIONS } from "@/lib/constants";
 import { formatPhoneInput, formatTimeRange } from "@/lib/format";
 import { applicationSchema, fieldErrors } from "@/lib/validation";
 import {
-  deriveSessionStatus,
+  sessionStatusFor,
   fetchProgramData,
   type DayWithSessions,
   type ProgramData,
   type SessionStatus,
 } from "@/lib/workshops";
-import type { ApplySessionsResponse, AxisParticipant, Workshop } from "@/lib/types";
+import type { ApplySessionResult, ApplySessionsResponse, AxisParticipant, Workshop } from "@/lib/types";
 
 interface FormState {
   name: string;
@@ -44,6 +44,7 @@ function statusSuffix(status: SessionStatus): string {
   if (status.phase === "마감") return "(마감)";
   if (status.phase === "신청 예정") return "(신청 예정)";
   if (status.phase === "확인 중") return "(확인 중)";
+  if (status.phase === "대기접수") return `(정원 마감 · 대기 ${status.waitingRemaining}명 접수 가능)`;
   return status.unlimited ? "(제한 없음)" : `(잔여 ${status.remaining}명)`;
 }
 
@@ -76,10 +77,7 @@ export function ApplicationForm() {
     if (!data) return map;
     for (const day of data.days) {
       for (const s of day.sessions) {
-        map.set(
-          s.id,
-          deriveSessionStatus(s, data.availabilityLoaded ? data.appliedCountByWorkshopId.get(s.id) ?? 0 : undefined, now)
-        );
+        map.set(s.id, sessionStatusFor(data, s, now));
       }
     }
     return map;
@@ -190,7 +188,8 @@ export function ApplicationForm() {
           <span className="sr-only">(필수, 1개 이상)</span>
         </legend>
         <p className="text-sm text-slate-500">
-          같은 날 세션은 기초→심화로 연계 구성되어 있어 함께 신청을 권장합니다(필수 아님). 마감·오픈 전 세션은 선택할 수 없습니다.
+          같은 날 세션은 기초→심화로 연계 구성되어 있어 함께 신청을 권장합니다(필수 아님). 정원이 찬 세션은 대기자(세션별 5명)로
+          접수되며 결원 발생 시 접수 순서대로 자동 전환됩니다. 마감·오픈 전 세션은 선택할 수 없습니다.
         </p>
 
         {data.days.map((day) => {
@@ -386,27 +385,46 @@ function ApplyResult({
 }) {
   const sessionById = new Map(days.flatMap((d) => d.sessions.map((s) => [s.id, { day: d, session: s }] as const)));
   const succeeded = result.results.filter((r) => r.ok);
+  const confirmed = succeeded.filter((r) => r.status !== "대기");
+  const waitlisted = succeeded.filter((r) => r.status === "대기");
   const failed = result.results.filter((r) => !r.ok);
+  const describe = (r: ApplySessionResult) => {
+    const info = sessionById.get(r.workshop_id);
+    return `${info?.day.day_label ?? ""} ${r.round_label ?? ""} ${
+      info ? formatTimeRange(info.session.start_at, info.session.end_at) : ""
+    } · ${r.topic ?? ""}`;
+  };
 
   return (
     <section aria-live="polite" className="flex flex-col gap-6">
-      {succeeded.length > 0 ? (
+      {confirmed.length > 0 && (
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-6">
           <h2 className="text-xl font-bold text-emerald-900">신청이 완료되었습니다</h2>
           <ul className="mt-3 flex flex-col gap-1.5 text-sm text-emerald-900 sm:text-base">
-            {succeeded.map((r) => {
-              const info = sessionById.get(r.workshop_id);
-              return (
-                <li key={r.workshop_id}>
-                  ✔ {info?.day.day_label} {r.round_label}{" "}
-                  {info ? formatTimeRange(info.session.start_at, info.session.end_at) : ""} · {r.topic}
-                </li>
-              );
-            })}
+            {confirmed.map((r) => (
+              <li key={r.workshop_id}>✔ {describe(r)}</li>
+            ))}
           </ul>
           <p className="mt-3 text-sm text-emerald-800">신청 결과 안내 메일은 매일 18:00에 일괄 발송됩니다.</p>
         </div>
-      ) : (
+      )}
+
+      {waitlisted.length > 0 && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6">
+          <h2 className="text-xl font-bold text-amber-900">대기자로 등록되었습니다</h2>
+          <ul className="mt-3 flex flex-col gap-1.5 text-sm text-amber-900 sm:text-base">
+            {waitlisted.map((r) => (
+              <li key={r.workshop_id}>⏳ {describe(r)}</li>
+            ))}
+          </ul>
+          <p className="mt-3 text-sm text-amber-800">
+            정원이 찬 세션입니다. 결원 발생 시 접수 순서대로 신청완료로 자동 전환되며, 전환 시 메일로 안내드립니다.
+            {confirmed.length === 0 && " 신청 결과 안내 메일은 매일 18:00에 일괄 발송됩니다."}
+          </p>
+        </div>
+      )}
+
+      {succeeded.length === 0 && (
         <div className="rounded-2xl border border-red-200 bg-red-50 p-6">
           <h2 className="text-xl font-bold text-red-900">신청되지 않았습니다</h2>
         </div>

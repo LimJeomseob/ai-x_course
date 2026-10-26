@@ -8,7 +8,7 @@ import { LevelBadge, PhaseBadge } from "@/components/ui/Badges";
 import { findInstructor, type InstructorProfile } from "@/lib/constants";
 import { formatTimeRange } from "@/lib/format";
 import {
-  deriveSessionStatus,
+  sessionStatusFor,
   fetchProgramData,
   instructorDisplay,
   type ProgramData,
@@ -104,11 +104,7 @@ export function ProgramCards() {
 
               <ol className="divide-y divide-slate-100">
                 {day.sessions.map((session) => {
-                  const status = deriveSessionStatus(
-                    session,
-                    data.availabilityLoaded ? data.appliedCountByWorkshopId.get(session.id) ?? 0 : undefined,
-                    now
-                  );
+                  const status = sessionStatusFor(data, session, now);
                   return (
                     <li key={session.id} className="px-5 py-4 sm:px-6">
                       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -134,7 +130,9 @@ export function ProgramCards() {
                           <p className="text-xs text-slate-500">
                             {status.unlimited
                               ? "정원 제한 없음"
-                              : `정원 ${session.capacity}명${status.remaining !== null ? ` · 잔여 ${status.remaining}명` : ""}`}
+                              : status.phase === "대기접수"
+                                ? `정원 ${session.capacity}명 마감 · 대기 ${status.waitingRemaining}명 접수 가능`
+                                : `정원 ${session.capacity}명${status.remaining !== null ? ` · 잔여 ${status.remaining}명` : ""}`}
                           </p>
                           <Link
                             href={`/apply?round=${session.round}`}
