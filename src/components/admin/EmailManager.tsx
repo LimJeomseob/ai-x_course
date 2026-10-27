@@ -14,6 +14,20 @@ import { buildVars, SAMPLE_RECIPIENT, sampleSessions } from "@/lib/email/content
 import { DEFAULT_TEMPLATES, renderEmail, resolveTemplate } from "@/lib/email/templates";
 import type { EmailLog, EmailSettings, EmailTemplateRow, EmailType } from "@/lib/types";
 
+/** /api/admin/emails/send 응답(서버 service.ts 의 SendOutcome 과 동일 구조) */
+interface SendOutcome {
+  sent: number;
+  failed: number;
+  skipped: number;
+  held: number;
+  messages: string[];
+}
+
+/** 발송 이력에서 재발송 가능한 유형 — M2(상태 변경 전/후 미보관)·TEST·ALERT 는 제외 */
+const RESENDABLE_TYPES = new Set<string>(["M1", "M3", "M5", "M4"]);
+/** /api/admin/emails/send 의 applicationIds 상한 */
+const SEND_CHUNK = 300;
+
 const SCHEDULE_NOTES: Record<EmailType, string> = {
   M1: "매일 18:00 KST — 당일 신청 건 통합 발송(이메일 기준 1통)",
   M2: "관리자 상태 변경 즉시 발송",
@@ -56,7 +70,7 @@ export function EmailManager() {
           {flash.text}
         </p>
       )}
-      {tab === "logs" && <LogsPanel supabase={supabase} />}
+      {tab === "logs" && <LogsPanel supabase={supabase} onFlash={setFlash} />}
       {tab === "templates" && <TemplatesPanel supabase={supabase} onFlash={setFlash} />}
       {tab === "settings" && <SettingsPanel supabase={supabase} onFlash={setFlash} />}
     </div>
@@ -66,33 +80,45 @@ export function EmailManager() {
 type Supabase = ReturnType<typeof createSupabaseBrowserClient>;
 type Flash = (f: { type: "success" | "error"; text: string } | null) => void;
 
-function LogsPanel({ supabase }: { supabase: Supabase }) {
+type MailBatch = EmailLog & { count: number; appIds: string[] };
+
+/** 재발송 가능 여부 — 허용 유형이고 현재 신청 건과 연결된 로그가 1건 이상일 때 */
+function canResend(m: MailBatch): boolean {
+  return RESENDABLE_TYPES.has(m.type) && m.appIds.length > 0;
+}
+
+function LogsPanel({ supabase, onFlash }: { supabase: Supabase; onFlash: Flash }) {
   const [logs, setLogs] = useState<EmailLog[]>([]);
   const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
   const [type, setType] = useState("");
   const [status, setStatus] = useState("");
   const [query, setQuery] = useState("");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
-  useEffect(() => {
-    supabase
+  const load = useCallback(async () => {
+    const { data } = await supabase
       .from(TABLES.EMAIL_LOGS)
       .select("*")
       .order("created_at", { ascending: false })
       .limit(2000)
-      .returns<EmailLog[]>()
-      .then(({ data }) => {
-        setLogs(data ?? []);
-        setLoading(false);
-      });
+      .returns<EmailLog[]>();
+    setLogs(data ?? []);
+    setLoading(false);
   }, [supabase]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   // 통합 발송은 신청 건마다 로그 행이 있으므로 화면에는 batch_key 단위(=메일 1통)로 묶는다.
   const mails = useMemo(() => {
-    const map = new Map<string, EmailLog & { count: number }>();
+    const map = new Map<string, MailBatch>();
     for (const log of logs) {
-      const cur = map.get(log.batch_key);
-      if (cur) cur.count += 1;
-      else map.set(log.batch_key, { ...log, count: 1 });
+      const cur = map.get(log.batch_key) ?? { ...log, count: 0, appIds: [] };
+      cur.count += 1;
+      if (log.application_id) cur.appIds.push(log.application_id);
+      map.set(log.batch_key, cur);
     }
     const q = query.trim().toLowerCase();
     return Array.from(map.values()).filter(
@@ -102,6 +128,70 @@ function LogsPanel({ supabase }: { supabase: Supabase }) {
 
   const today = kstDateKey(new Date());
   const sentToday = new Set(logs.filter((l) => l.status === "성공" && kstDateKey(l.created_at) === today).map((l) => l.batch_key)).size;
+
+  // 선택은 현재 표시 중인 행에 한해 유효(필터 변경 시 숨겨진 선택은 자동 제외)
+  const selectableMails = useMemo(() => mails.filter(canResend), [mails]);
+  const selectedMails = useMemo(() => selectableMails.filter((m) => selected.has(m.batch_key)), [selectableMails, selected]);
+  const allChecked = selectableMails.length > 0 && selectableMails.every((m) => selected.has(m.batch_key));
+
+  function toggleAll() {
+    setSelected(allChecked ? new Set() : new Set(selectableMails.map((m) => m.batch_key)));
+  }
+
+  function toggleOne(batchKey: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(batchKey)) next.delete(batchKey);
+      else next.add(batchKey);
+      return next;
+    });
+  }
+
+  /** 선택한 메일(batch)을 유형별로 묶어 /api/admin/emails/send(수동 발송)로 다시 보낸다. */
+  async function resend() {
+    const targets = selectedMails;
+    if (targets.length === 0) return;
+    if (!window.confirm(`선택한 ${targets.length}통을 재발송합니다. 현재 신청 데이터·템플릿으로 다시 작성되며, 성공 건도 다시 발송됩니다. 계속하시겠습니까?`)) return;
+
+    // 유형별 신청 ID 집계(중복 제거). 서버가 유형별 통합 규칙으로 다시 묶어 보낸다.
+    const idsByType = new Map<string, Set<string>>();
+    for (const m of targets) {
+      const set = idsByType.get(m.type) ?? new Set<string>();
+      m.appIds.forEach((id) => set.add(id));
+      idsByType.set(m.type, set);
+    }
+
+    setBusy(true);
+    onFlash(null);
+    const parts: string[] = [];
+    const notes: string[] = [];
+    let hadError = false;
+    try {
+      for (const t of EMAIL_TYPES_ORDERED) {
+        const ids = Array.from(idsByType.get(t) ?? []);
+        if (ids.length === 0) continue;
+        const total: SendOutcome = { sent: 0, failed: 0, skipped: 0, held: 0, messages: [] };
+        for (let i = 0; i < ids.length; i += SEND_CHUNK) {
+          const res = await adminFetch<SendOutcome>("/api/admin/emails/send", { body: { type: t, applicationIds: ids.slice(i, i + SEND_CHUNK) } });
+          total.sent += res.sent;
+          total.failed += res.failed;
+          total.skipped += res.skipped;
+          total.messages.push(...res.messages);
+        }
+        if (total.failed) hadError = true;
+        parts.push(`${t} ${total.sent}통 발송${total.failed ? ` · ${total.failed}통 실패` : ""}${total.skipped ? ` · ${total.skipped}건 제외(이메일 없음 등)` : ""}`);
+        if (total.messages[0]) notes.push(total.messages[0]);
+      }
+      onFlash({ type: hadError ? "error" : "success", text: `재발송 결과 — ${parts.join(" / ")}${notes.length ? ` — ${notes[0]}` : ""}` });
+      setSelected(new Set());
+      await load();
+    } catch (e) {
+      onFlash({ type: "error", text: e instanceof Error ? e.message : "재발송 중 오류가 발생했습니다." });
+      await load();
+    } finally {
+      setBusy(false);
+    }
+  }
 
   function exportCsv() {
     exportRowsAsCsv(
@@ -134,18 +224,35 @@ function LogsPanel({ supabase }: { supabase: Supabase }) {
           <option>실패</option>
         </select>
         <input type="search" aria-label="검색" placeholder="수신 주소/제목" value={query} onChange={(e) => setQuery(e.target.value)} className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm" />
-        <Button size="sm" variant="outline" onClick={exportCsv}>CSV</Button>
+        <Button size="sm" variant="outline" disabled={busy} onClick={exportCsv}>CSV</Button>
+        <span className="mx-1 h-5 w-px bg-slate-200" aria-hidden="true" />
+        <Button size="sm" variant="outline" disabled={!selectedMails.length || busy} onClick={resend}>
+          {busy ? "재발송 중..." : `재발송${selectedMails.length ? ` (${selectedMails.length})` : ""}`}
+        </Button>
       </div>
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-card">
         <table className="min-w-[1000px] w-full text-left text-sm">
           <thead className="bg-slate-50 text-xs font-bold text-slate-600">
-            <tr><th className="px-3 py-2">일시</th><th className="px-3 py-2">유형</th><th className="px-3 py-2">수신</th><th className="px-3 py-2">제목</th><th className="px-3 py-2">건수</th><th className="px-3 py-2">결과</th><th className="px-3 py-2">오류</th></tr>
+            <tr>
+              <th className="px-3 py-2"><input type="checkbox" aria-label="표시된 재발송 가능 항목 전체 선택" checked={allChecked} disabled={busy || selectableMails.length === 0} onChange={toggleAll} /></th>
+              <th className="px-3 py-2">일시</th><th className="px-3 py-2">유형</th><th className="px-3 py-2">수신</th><th className="px-3 py-2">제목</th><th className="px-3 py-2">건수</th><th className="px-3 py-2">결과</th><th className="px-3 py-2">오류</th>
+            </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {loading && <tr><td colSpan={7} className="px-3 py-6 text-center text-slate-500">불러오는 중...</td></tr>}
-            {!loading && mails.length === 0 && <tr><td colSpan={7} className="px-3 py-6 text-center text-slate-500">발송 이력이 없습니다.</td></tr>}
+            {loading && <tr><td colSpan={8} className="px-3 py-6 text-center text-slate-500">불러오는 중...</td></tr>}
+            {!loading && mails.length === 0 && <tr><td colSpan={8} className="px-3 py-6 text-center text-slate-500">발송 이력이 없습니다.</td></tr>}
             {mails.map((m) => (
-              <tr key={m.batch_key} className="align-top">
+              <tr key={m.batch_key} className={clsx("align-top", selected.has(m.batch_key) && canResend(m) && "bg-accent/5")}>
+                <td className="px-3 py-2">
+                  <input
+                    type="checkbox"
+                    aria-label={`${m.type} ${m.to_email} 선택`}
+                    checked={selected.has(m.batch_key) && canResend(m)}
+                    disabled={busy || !canResend(m)}
+                    title={canResend(m) ? undefined : "M2·TEST·ALERT 또는 신청 정보가 없는 건은 재발송할 수 없습니다."}
+                    onChange={() => toggleOne(m.batch_key)}
+                  />
+                </td>
                 <td className="whitespace-nowrap px-3 py-2 text-xs">{formatDateTime(m.created_at)}</td>
                 <td className="whitespace-nowrap px-3 py-2">{m.type} <span className="text-xs text-slate-500">{EMAIL_TYPE_LABELS[m.type]}</span></td>
                 <td className="px-3 py-2">{m.to_email}</td>
@@ -158,7 +265,10 @@ function LogsPanel({ supabase }: { supabase: Supabase }) {
           </tbody>
         </table>
       </div>
-      <p className="text-xs text-slate-500">발송 실패 건은 신청자 관리에서 ‘메일: 발송 실패 있음’ 필터로 찾아 [수동 발송]으로 재발송할 수 있습니다.</p>
+      <p className="text-xs text-slate-500">
+        체크 후 [재발송]: 현재 신청 데이터·템플릿으로 다시 작성해 발송합니다(M1·M3·M5·M4 만 가능, 성공 건도 다시 발송). M2·TEST·ALERT 와 신청 정보가 삭제된 건은 재발송할 수 없습니다.
+        실패 건은 신청자 관리의 ‘메일: 발송 실패 있음’ 필터 → [수동 발송]으로도 보낼 수 있습니다.
+      </p>
     </section>
   );
 }
