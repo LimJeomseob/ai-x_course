@@ -267,7 +267,7 @@ function TemplatesPanel({ supabase, onFlash }: { supabase: Supabase; onFlash: Fl
           <p className={clsx("rounded-lg p-2 text-xs", prelearningMissing ? "bg-amber-50 text-amber-800" : "bg-slate-50 text-slate-600")}>
             {"{사전학습URL}"}은 세션 관리(/admin/sessions)의 5차 ‘사전학습 URL’로 채워집니다.
             {prelearningMissing
-              ? " 현재 미입력 상태라 미리보기는 예시 주소로 표시되며, 실제 발송 메일에는 사전학습 안내가 빠집니다."
+              ? " 현재 미입력 상태라 미리보기·발송 메일 모두 사전학습 안내가 작성되지 않습니다."
               : " 본문에서 이 변수를 지우면 사전학습 링크가 발송되지 않습니다."}
           </p>
         )}

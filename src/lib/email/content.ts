@@ -291,9 +291,6 @@ export function buildVars(
 /** 세션 관리에서 입력한 링크(차수별) — 미리보기·테스트 발송 샘플에 반영 */
 export type SessionLinks = Record<number, { zoomLink: string | null; prelearningUrl: string | null }>;
 
-/** 세션 관리에 사전학습 URL이 아직 없을 때 미리보기에 쓰는 자리표시 URL */
-export const SAMPLE_PRELEARNING_URL = "https://example.com/prelearning";
-
 /**
  * 관리자 미리보기·테스트 발송용 샘플 데이터.
  * links가 있으면 세션 관리(/admin/sessions)에 입력된 Zoom 링크·사전학습 URL을 차수별로 덮어쓴다.
@@ -380,7 +377,7 @@ function sampleSessionsBase(type: EmailType): MailSession[] {
         topic: "Claude Skill 기반 교수법 활용(심화)",
         startAt: "2026-11-13T15:30:00+09:00",
         endAt: "2026-11-13T17:30:00+09:00",
-        prelearningUrl: SAMPLE_PRELEARNING_URL,
+        // 사전학습 URL은 세션 관리 입력값만 사용 — 미입력이면 본문에 사전학습 안내를 작성하지 않는다.
       },
     ];
   }
