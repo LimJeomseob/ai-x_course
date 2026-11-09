@@ -288,8 +288,28 @@ export function buildVars(
   }
 }
 
-/** 관리자 미리보기·테스트 발송용 샘플 데이터 */
-export function sampleSessions(type: EmailType): MailSession[] {
+/** 세션 관리에서 입력한 링크(차수별) — 미리보기·테스트 발송 샘플에 반영 */
+export type SessionLinks = Record<number, { zoomLink: string | null; prelearningUrl: string | null }>;
+
+/** 세션 관리에 사전학습 URL이 아직 없을 때 미리보기에 쓰는 자리표시 URL */
+export const SAMPLE_PRELEARNING_URL = "https://example.com/prelearning";
+
+/**
+ * 관리자 미리보기·테스트 발송용 샘플 데이터.
+ * links가 있으면 세션 관리(/admin/sessions)에 입력된 Zoom 링크·사전학습 URL을 차수별로 덮어쓴다.
+ */
+export function sampleSessions(type: EmailType, links?: SessionLinks): MailSession[] {
+  return sampleSessionsBase(type).map((s) => {
+    const link = links?.[s.round];
+    return {
+      ...s,
+      zoomLink: link?.zoomLink ?? s.zoomLink,
+      prelearningUrl: link?.prelearningUrl ?? s.prelearningUrl,
+    };
+  });
+}
+
+function sampleSessionsBase(type: EmailType): MailSession[] {
   const base: MailSession = {
     applicationId: "00000000-0000-0000-0000-000000000000",
     round: 1,
@@ -334,6 +354,33 @@ export function sampleSessions(type: EmailType): MailSession[] {
         locationUrl: null,
         isOnline: true,
         instructor: "임상훈 교수(국립 금오공대)",
+      },
+    ];
+  }
+  if (type === "M3") {
+    // M3는 사전학습 URL(5차)이 본문에 들어가는 메일 — 5차가 포함된 Day C(4·5차)로 미리보기한다.
+    const dayC: MailSession = {
+      ...base,
+      round: 4,
+      roundLabel: "4차",
+      topic: "NotebookLM·RAG 기반 AI 튜터 만들기",
+      startAt: "2026-11-13T13:30:00+09:00",
+      endAt: "2026-11-13T15:30:00+09:00",
+      dayCode: "C",
+      dayLabel: "11/13(금)",
+      location: "4동 105호 전산실습실",
+      instructor: "연정호 박사(SK hynics)",
+    };
+    return [
+      dayC,
+      {
+        ...dayC,
+        round: 5,
+        roundLabel: "5차",
+        topic: "Claude Skill 기반 교수법 활용(심화)",
+        startAt: "2026-11-13T15:30:00+09:00",
+        endAt: "2026-11-13T17:30:00+09:00",
+        prelearningUrl: SAMPLE_PRELEARNING_URL,
       },
     ];
   }

@@ -10,9 +10,9 @@ import { TABLES } from "@/lib/db-tables";
 import { EMAIL_TYPE_LABELS, EMAIL_TYPES_ORDERED } from "@/lib/constants";
 import { exportRowsAsCsv } from "@/lib/csv";
 import { formatDateTime, kstDateKey } from "@/lib/format";
-import { buildVars, SAMPLE_RECIPIENT, sampleSessions } from "@/lib/email/content";
+import { buildVars, SAMPLE_RECIPIENT, sampleSessions, type SessionLinks } from "@/lib/email/content";
 import { DEFAULT_TEMPLATES, renderEmail, resolveTemplate } from "@/lib/email/templates";
-import type { EmailLog, EmailSettings, EmailTemplateRow, EmailType } from "@/lib/types";
+import type { EmailLog, EmailSettings, EmailTemplateRow, EmailType, WorkshopAdminLinks } from "@/lib/types";
 
 const SCHEDULE_NOTES: Record<EmailType, string> = {
   M1: "매일 18:00 KST — 당일 신청 건 통합 발송(이메일 기준 1통)",
@@ -179,6 +179,17 @@ function TemplatesPanel({ supabase, onFlash }: { supabase: Supabase; onFlash: Fl
     load();
   }, [load]);
 
+  // 세션 관리(/admin/sessions)에 입력된 Zoom 링크·사전학습 URL — 미리보기 본문에 반영
+  const [links, setLinks] = useState<SessionLinks | undefined>(undefined);
+  useEffect(() => {
+    adminFetch<{ sessions: WorkshopAdminLinks[] }>("/api/admin/sessions")
+      .then(({ sessions }) =>
+        setLinks(Object.fromEntries(sessions.map((s) => [s.round, { zoomLink: s.zoom_link, prelearningUrl: s.prelearning_url }])))
+      )
+      .catch(() => setLinks(undefined));
+  }, []);
+  const prelearningMissing = type === "M3" && links !== undefined && !links[5]?.prelearningUrl;
+
   const row = rows.find((r) => r.type === type);
 
   useEffect(() => {
@@ -187,10 +198,10 @@ function TemplatesPanel({ supabase, onFlash }: { supabase: Supabase; onFlash: Fl
   }, [type, row]);
 
   const preview = useMemo(() => {
-    const sessions = sampleSessions(type);
+    const sessions = sampleSessions(type, links);
     const vars = buildVars(type, SAMPLE_RECIPIENT, sessions, type === "M2" ? sessions.map((s) => ({ session: s, from: "대기", to: "신청완료" })) : undefined);
     return renderEmail({ subject: draft.subject, html: draft.body_html, text: draft.body_text }, vars, typeof window === "undefined" ? "" : window.location.origin);
-  }, [type, draft]);
+  }, [type, draft, links]);
 
   async function save(reset = false) {
     setSaving(true);
@@ -252,6 +263,14 @@ function TemplatesPanel({ supabase, onFlash }: { supabase: Supabase; onFlash: Fl
         <p className="text-xs text-slate-500">
           사용 가능 변수: {(row?.variables ?? []).map((v) => `{${v}}`).join(" ")} — 머리말·꼬리말(포털 링크·서명)은 자동 추가됩니다.
         </p>
+        {type === "M3" && (
+          <p className={clsx("rounded-lg p-2 text-xs", prelearningMissing ? "bg-amber-50 text-amber-800" : "bg-slate-50 text-slate-600")}>
+            {"{사전학습URL}"}은 세션 관리(/admin/sessions)의 5차 ‘사전학습 URL’로 채워집니다.
+            {prelearningMissing
+              ? " 현재 미입력 상태라 미리보기는 예시 주소로 표시되며, 실제 발송 메일에는 사전학습 안내가 빠집니다."
+              : " 본문에서 이 변수를 지우면 사전학습 링크가 발송되지 않습니다."}
+          </p>
+        )}
         <div className="flex flex-wrap gap-2">
           <Button size="sm" disabled={saving} onClick={() => save(false)}>저장</Button>
           <Button size="sm" variant="outline" disabled={saving} onClick={() => save(true)}>기본값으로 되돌리기</Button>
