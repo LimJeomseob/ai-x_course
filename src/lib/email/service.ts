@@ -4,7 +4,7 @@ import { TABLES } from "@/lib/db-tables";
 import { addDaysToDateKey, kstDateKey } from "@/lib/format";
 import { combinedNotes, instructorDisplay } from "@/lib/workshops";
 import type { EmailLogType, EmailSettings, EmailTemplateRow, EmailType } from "@/lib/types";
-import { buildVars, sampleSessions, SAMPLE_RECIPIENT, type MailSession, type StatusChange } from "./content";
+import { buildVars, sampleSessions, SAMPLE_RECIPIENT, type MailSession, type SessionLinks, type StatusChange } from "./content";
 import { sendMailWithRetry } from "./mailer";
 import { renderEmail, resolveTemplate } from "./templates";
 
@@ -481,7 +481,15 @@ export async function sendManual(
 
 /** 테스트 발송 — 샘플 데이터로 렌더링해 관리자 본인 주소로 보낸다(로그 type=TEST). */
 export async function sendTest(db: SupabaseClient, type: EmailType, to: string): Promise<boolean> {
-  const sessions = sampleSessions(type);
+  // 세션 관리에 입력된 Zoom 링크·사전학습 URL을 샘플에 반영한다.
+  const { data: linkRows } = await db.from("workshops").select("round, zoom_link, prelearning_url");
+  const links: SessionLinks = Object.fromEntries(
+    ((linkRows ?? []) as { round: number; zoom_link: string | null; prelearning_url: string | null }[]).map((r) => [
+      r.round,
+      { zoomLink: r.zoom_link, prelearningUrl: r.prelearning_url },
+    ])
+  );
+  const sessions = sampleSessions(type, links);
   return deliver(db, {
     type: "TEST",
     templateType: type,

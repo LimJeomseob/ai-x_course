@@ -10,9 +10,9 @@ import { TABLES } from "@/lib/db-tables";
 import { EMAIL_TYPE_LABELS, EMAIL_TYPES_ORDERED } from "@/lib/constants";
 import { exportRowsAsCsv } from "@/lib/csv";
 import { formatDateTime, kstDateKey } from "@/lib/format";
-import { buildVars, SAMPLE_RECIPIENT, sampleSessions } from "@/lib/email/content";
+import { buildVars, SAMPLE_RECIPIENT, sampleSessions, type SessionLinks } from "@/lib/email/content";
 import { DEFAULT_TEMPLATES, renderEmail, resolveTemplate } from "@/lib/email/templates";
-import type { EmailLog, EmailSettings, EmailTemplateRow, EmailType } from "@/lib/types";
+import type { EmailLog, EmailSettings, EmailTemplateRow, EmailType, WorkshopAdminLinks } from "@/lib/types";
 
 const SCHEDULE_NOTES: Record<EmailType, string> = {
   M1: "매일 18:00 KST — 당일 신청 건 통합 발송(이메일 기준 1통)",
@@ -179,7 +179,30 @@ function TemplatesPanel({ supabase, onFlash }: { supabase: Supabase; onFlash: Fl
     load();
   }, [load]);
 
+  // 세션 관리(/admin/sessions)에 입력된 Zoom 링크·사전학습 URL — 미리보기 본문에 반영
+  const [links, setLinks] = useState<SessionLinks | undefined>(undefined);
+  useEffect(() => {
+    adminFetch<{ sessions: WorkshopAdminLinks[] }>("/api/admin/sessions")
+      .then(({ sessions }) =>
+        setLinks(Object.fromEntries(sessions.map((s) => [s.round, { zoomLink: s.zoom_link, prelearningUrl: s.prelearning_url }])))
+      )
+      .catch(() => setLinks(undefined));
+  }, []);
+  const usesPrelearning = draft.body_html.includes("{사전학습URL}") || draft.body_text.includes("{사전학습URL}");
+  const prelearningMissing = usesPrelearning && links !== undefined && !links[5]?.prelearningUrl;
+
   const row = rows.find((r) => r.type === type);
+
+  // 실제 치환되는 변수 = 코드가 만드는 변수(+포털URL). 본문에 그 외 변수가 있으면 경고한다.
+  const availableVars = useMemo(() => {
+    const sessions = sampleSessions(type);
+    const vars = buildVars(type, SAMPLE_RECIPIENT, sessions);
+    return Array.from(new Set([...Object.keys(vars.text), ...Object.keys(vars.html ?? {}), "포털URL"]));
+  }, [type]);
+  const unknownVars = useMemo(() => {
+    const used = `${draft.subject}\n${draft.body_html}\n${draft.body_text}`.match(/\{([^{}\s]+)\}/g) ?? [];
+    return Array.from(new Set(used.map((m) => m.slice(1, -1)))).filter((v) => !availableVars.includes(v));
+  }, [draft, availableVars]);
 
   useEffect(() => {
     const resolved = resolveTemplate(type, row);
@@ -187,10 +210,10 @@ function TemplatesPanel({ supabase, onFlash }: { supabase: Supabase; onFlash: Fl
   }, [type, row]);
 
   const preview = useMemo(() => {
-    const sessions = sampleSessions(type);
+    const sessions = sampleSessions(type, links);
     const vars = buildVars(type, SAMPLE_RECIPIENT, sessions, type === "M2" ? sessions.map((s) => ({ session: s, from: "대기", to: "신청완료" })) : undefined);
     return renderEmail({ subject: draft.subject, html: draft.body_html, text: draft.body_text }, vars, typeof window === "undefined" ? "" : window.location.origin);
-  }, [type, draft]);
+  }, [type, draft, links]);
 
   async function save(reset = false) {
     setSaving(true);
@@ -250,8 +273,21 @@ function TemplatesPanel({ supabase, onFlash }: { supabase: Supabase; onFlash: Fl
           <textarea rows={8} className={clsx(inputBaseClass, "font-mono text-xs")} value={draft.body_text} onChange={(e) => setDraft((d) => ({ ...d, body_text: e.target.value }))} />
         </label>
         <p className="text-xs text-slate-500">
-          사용 가능 변수: {(row?.variables ?? []).map((v) => `{${v}}`).join(" ")} — 머리말·꼬리말(포털 링크·서명)은 자동 추가됩니다.
+          사용 가능 변수: {availableVars.map((v) => `{${v}}`).join(" ")} — 머리말·꼬리말(포털 링크·서명)은 자동 추가됩니다.
         </p>
+        {unknownVars.length > 0 && (
+          <p role="alert" className="rounded-lg bg-red-50 p-2 text-xs font-semibold text-red-700">
+            이 유형에서 지원하지 않는 변수: {unknownVars.map((v) => `{${v}}`).join(" ")} — 저장하면 메일에 글자 그대로 표시됩니다.
+          </p>
+        )}
+        {usesPrelearning && (
+          <p className={clsx("rounded-lg p-2 text-xs", prelearningMissing ? "bg-amber-50 text-amber-800" : "bg-slate-50 text-slate-600")}>
+            {"{사전학습URL}"}은 세션 관리(/admin/sessions)의 5차 ‘사전학습 URL’로 채워집니다.
+            {prelearningMissing
+              ? " 현재 미입력 상태라 미리보기·발송 메일 모두 사전학습 안내가 작성되지 않습니다."
+              : " 현재 입력된 URL이 본문에 포함됩니다."}
+          </p>
+        )}
         <div className="flex flex-wrap gap-2">
           <Button size="sm" disabled={saving} onClick={() => save(false)}>저장</Button>
           <Button size="sm" variant="outline" disabled={saving} onClick={() => save(true)}>기본값으로 되돌리기</Button>

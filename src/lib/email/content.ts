@@ -188,10 +188,25 @@ export function buildM2Vars(recipient: MailRecipient, changes: StatusChange[]): 
   };
 }
 
+/** 사전학습 URL(세션 관리 입력값) — 미입력이면 빈 문자열(본문에 미작성) */
+function prelearningVars(sessions: MailSession[]) {
+  const prelearning = sortSessions(sessions).filter((s) => s.prelearningUrl);
+  if (prelearning.length === 0) return { text: "", html: "" };
+  return {
+    text: `\n[사전학습]\n${prelearning.map((s) => `${s.roundLabel} 사전학습 동영상: ${s.prelearningUrl}`).join("\n")}\n`,
+    html: `<h3>사전학습</h3>${prelearning
+      .map(
+        (s) =>
+          `<p>${escapeHtml(s.roundLabel)} 사전학습 동영상: <a href="${escapeHtml(s.prelearningUrl!)}" target="_blank" rel="noopener noreferrer">${escapeHtml(s.prelearningUrl!)}</a></p>`
+      )
+      .join("")}`,
+  };
+}
+
 export function buildM3Vars(recipient: MailRecipient, sessions: MailSession[]): RenderVars {
   const { first, location } = sharedDayVars(sessions);
   const list = sessionList(sessions);
-  const prelearning = sortSessions(sessions).filter((s) => s.prelearningUrl);
+  const prelearning = prelearningVars(sessions);
   return {
     text: {
       성명: recipient.name,
@@ -200,22 +215,13 @@ export function buildM3Vars(recipient: MailRecipient, sessions: MailSession[]): 
       장소: location.text,
       강사: first.instructor,
       협조사항: uniqueNotes(sessions),
-      사전학습URL: prelearning.length
-        ? `\n[사전학습]\n${prelearning.map((s) => `${s.roundLabel} 사전학습 동영상: ${s.prelearningUrl}`).join("\n")}\n`
-        : "",
+      사전학습URL: prelearning.text,
       참석확인취소방법: `참석이 어려우신 경우 ${CANCEL_GUIDE}로 취소해 주시기 바랍니다. 취소하신 자리는 대기자에게 안내됩니다.`,
     },
     html: {
       세션목록: list.html,
       장소: location.html,
-      사전학습URL: prelearning.length
-        ? `<h3>사전학습</h3>${prelearning
-            .map(
-              (s) =>
-                `<p>${escapeHtml(s.roundLabel)} 사전학습 동영상: <a href="${escapeHtml(s.prelearningUrl!)}" target="_blank" rel="noopener noreferrer">${escapeHtml(s.prelearningUrl!)}</a></p>`
-            )
-            .join("")}`
-        : "",
+      사전학습URL: prelearning.html,
     },
   };
 }
@@ -224,6 +230,7 @@ export function buildM5Vars(recipient: MailRecipient, sessions: MailSession[]): 
   const { first, location } = sharedDayVars(sessions);
   const list = sessionList(sessions);
   const zoom = zoomVars(sessions);
+  const prelearning = prelearningVars(sessions);
   return {
     text: {
       성명: recipient.name,
@@ -235,9 +242,10 @@ export function buildM5Vars(recipient: MailRecipient, sessions: MailSession[]): 
         ? "실습에 사용할 구글 계정(아이디·비밀번호)으로 미리 로그인이 되는지 확인해 주세요."
         : "전산 실습실 PC에서 사용할 구글 계정(아이디·비밀번호)을 미리 확인하시고, 2단계 인증용 휴대폰을 지참해 주세요.",
       Zoom링크: zoom.text,
+      사전학습URL: prelearning.text,
       장소: location.text,
     },
-    html: { 세션목록: list.html, Zoom링크: zoom.html, 장소: location.html },
+    html: { 세션목록: list.html, Zoom링크: zoom.html, 사전학습URL: prelearning.html, 장소: location.html },
   };
 }
 
@@ -245,6 +253,7 @@ export function buildM4Vars(recipient: MailRecipient, sessions: MailSession[]): 
   const { first, location } = sharedDayVars(sessions);
   const list = sessionList(sessions);
   const zoom = zoomVars(sessions);
+  const prelearning = prelearningVars(sessions);
   const startAt = new Date(new Date(first.startAt).getTime() - 10 * 60 * 1000).toISOString();
   return {
     text: {
@@ -259,9 +268,10 @@ export function buildM4Vars(recipient: MailRecipient, sessions: MailSession[]): 
         ? "PC(카메라·마이크), 안정적인 인터넷 환경, 구글 계정"
         : "개인 노트북 미지참 가능(실습실 PC 제공), 구글 계정 정보, 2단계 인증용 휴대폰",
       Zoom링크: zoom.text,
+      사전학습URL: prelearning.text,
       문의처: `경상국립대학교 AI융합원 ${CONTACT_PHONE} / ${CONTACT_EMAIL}`,
     },
-    html: { 세션목록: list.html, Zoom링크: zoom.html, 장소: location.html },
+    html: { 세션목록: list.html, Zoom링크: zoom.html, 사전학습URL: prelearning.html, 장소: location.html },
   };
 }
 
@@ -288,8 +298,25 @@ export function buildVars(
   }
 }
 
-/** 관리자 미리보기·테스트 발송용 샘플 데이터 */
-export function sampleSessions(type: EmailType): MailSession[] {
+/** 세션 관리에서 입력한 링크(차수별) — 미리보기·테스트 발송 샘플에 반영 */
+export type SessionLinks = Record<number, { zoomLink: string | null; prelearningUrl: string | null }>;
+
+/**
+ * 관리자 미리보기·테스트 발송용 샘플 데이터.
+ * links가 있으면 세션 관리(/admin/sessions)에 입력된 Zoom 링크·사전학습 URL을 차수별로 덮어쓴다.
+ */
+export function sampleSessions(type: EmailType, links?: SessionLinks): MailSession[] {
+  return sampleSessionsBase(type).map((s) => {
+    const link = links?.[s.round];
+    return {
+      ...s,
+      zoomLink: link?.zoomLink ?? s.zoomLink,
+      prelearningUrl: link?.prelearningUrl ?? s.prelearningUrl,
+    };
+  });
+}
+
+function sampleSessionsBase(type: EmailType): MailSession[] {
   const base: MailSession = {
     applicationId: "00000000-0000-0000-0000-000000000000",
     round: 1,
@@ -326,14 +353,41 @@ export function sampleSessions(type: EmailType): MailSession[] {
         round: 3,
         roundLabel: "3차",
         topic: "AI 윤리 가이드 강의계획서 반영 / AI 활용 과정평가 루브릭·CQI(온라인)",
-        startAt: "2026-11-11T13:30:00+09:00",
-        endAt: "2026-11-11T15:30:00+09:00",
+        startAt: "2026-11-11T15:30:00+09:00",
+        endAt: "2026-11-11T17:30:00+09:00",
         dayCode: "B",
         dayLabel: "11/11(수)",
         location: "온라인(Zoom)",
         locationUrl: null,
         isOnline: true,
         instructor: "임상훈 교수(국립 금오공대)",
+      },
+    ];
+  }
+  if (type === "M3" || type === "M5" || type === "M4") {
+    // 운영일 단위 안내(M3·M5·M4)는 {사전학습URL}(5차)을 쓸 수 있으므로 5차가 포함된 Day C(4·5차)로 미리보기한다.
+    const dayC: MailSession = {
+      ...base,
+      round: 4,
+      roundLabel: "4차",
+      topic: "NotebookLM·RAG 기반 AI 튜터 만들기",
+      startAt: "2026-11-13T13:30:00+09:00",
+      endAt: "2026-11-13T15:30:00+09:00",
+      dayCode: "C",
+      dayLabel: "11/13(금)",
+      location: "4동 105호 전산실습실",
+      instructor: "연정호 박사(SK hynics)",
+    };
+    return [
+      dayC,
+      {
+        ...dayC,
+        round: 5,
+        roundLabel: "5차",
+        topic: "Claude Skill 기반 교수법 활용(심화)",
+        startAt: "2026-11-13T15:30:00+09:00",
+        endAt: "2026-11-13T17:30:00+09:00",
+        // 사전학습 URL은 세션 관리 입력값만 사용 — 미입력이면 본문에 사전학습 안내를 작성하지 않는다.
       },
     ];
   }
