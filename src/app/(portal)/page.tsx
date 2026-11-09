@@ -10,11 +10,32 @@ import {
   OVERVIEW_LOCATION_TEXT,
   PROGRAM_NAME,
   PROGRAM_YEAR_TITLE,
+  SCHEDULE_CHANGE_NOTICES,
 } from "@/lib/constants";
 
 export default function IntroPage() {
   return (
     <div className="flex flex-col gap-10">
+      {SCHEDULE_CHANGE_NOTICES.map((n) => (
+        <section
+          key={n.title}
+          role="alert"
+          aria-label={n.title}
+          className="rounded-2xl border-2 border-red-300 bg-red-50 p-5 text-slate-800 shadow-card sm:p-6"
+        >
+          <h2 className="text-lg font-bold text-red-700">📢 [정정] {n.title}</h2>
+          <p className="mt-2 text-sm leading-relaxed sm:text-base">{n.apology}</p>
+          <p className="mt-3 text-sm font-medium text-slate-700">{n.session}</p>
+          <p className="mt-1 text-base font-bold sm:text-lg">
+            <span className="text-slate-400 line-through">{n.before}</span>
+            <span aria-hidden="true"> → </span>
+            <span className="sr-only">에서 </span>
+            <span className="text-red-700">{n.after}</span>
+            <span className="sr-only">으로 변경</span>
+          </p>
+          <p className="mt-2 text-sm text-slate-600">{n.note}</p>
+        </section>
+      ))}
       <section aria-labelledby="intro-title" className="rounded-2xl bg-brand px-6 py-8 text-white shadow-card sm:px-10 sm:py-10">
         <p className="text-sm font-medium text-white/80">경상국립대학교 글로컬대학30 · {PROGRAM_YEAR_TITLE}</p>
         <h1 id="intro-title" className="mt-2 text-2xl font-bold leading-snug sm:text-3xl">
