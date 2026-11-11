@@ -193,11 +193,11 @@ function prelearningVars(sessions: MailSession[]) {
   const prelearning = sortSessions(sessions).filter((s) => s.prelearningUrl);
   if (prelearning.length === 0) return { text: "", html: "" };
   return {
-    text: `\n[사전학습]\n${prelearning.map((s) => `${s.roundLabel} 사전학습 동영상: ${s.prelearningUrl}`).join("\n")}\n`,
+    text: `\n[사전학습]\n${prelearning.map((s) => `${s.roundLabel} 사전학습 동영상 및 강의자료: ${s.prelearningUrl}`).join("\n")}\n`,
     html: `<h3>사전학습</h3>${prelearning
       .map(
         (s) =>
-          `<p>${escapeHtml(s.roundLabel)} 사전학습 동영상: <a href="${escapeHtml(s.prelearningUrl!)}" target="_blank" rel="noopener noreferrer">${escapeHtml(s.prelearningUrl!)}</a></p>`
+          `<p>${escapeHtml(s.roundLabel)} 사전학습 동영상 및 강의자료: <a href="${escapeHtml(s.prelearningUrl!)}" target="_blank" rel="noopener noreferrer">${escapeHtml(s.prelearningUrl!)}</a></p>`
       )
       .join("")}`,
   };
