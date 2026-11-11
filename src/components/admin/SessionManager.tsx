@@ -67,7 +67,7 @@ export function SessionManager() {
       <div>
         <h1 className="text-2xl font-bold text-slate-900">세션 관리</h1>
         <p className="mt-1 text-sm text-slate-500">
-          Zoom 링크(3차)는 D-1 준비 안내(M5)·당일 안내(M4) 메일로만, 사전학습 URL(5차)은 D-3 운영 안내(M3) 메일로만 발송되며 포털에는 노출되지 않습니다.
+          Zoom 링크(3차)는 D-1 준비 안내(M5)·당일 안내(M4) 메일로만, 사전학습 동영상 및 강의자료 URL(5차)은 D-3 운영 안내(M3) 메일로만 발송되며 포털에는 노출되지 않습니다.
           Zoom 링크가 비어 있으면 M5 발송이 보류되고 관리자에게 알림 메일이 갑니다.
         </p>
       </div>
@@ -109,7 +109,7 @@ export function SessionManager() {
                       <input type="url" placeholder="https://zoom.us/j/..." className={clsx(inputBaseClass, s.day.is_online && !draft.zoom_link && "border-red-400")} value={draft.zoom_link} onChange={(e) => update("zoom_link", e.target.value)} />
                     </label>
                     <label className="flex flex-col gap-1 text-xs font-semibold text-slate-600">
-                      사전학습 URL
+                      사전학습 동영상 및 강의자료 URL
                       <input type="url" placeholder="https://" className={inputBaseClass} value={draft.prelearning_url} onChange={(e) => update("prelearning_url", e.target.value)} />
                     </label>
                     <Button size="sm" className="justify-self-start md:col-span-3" disabled={savingId === s.id} onClick={() => saveSession(s.id)}>
