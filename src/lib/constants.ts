@@ -62,17 +62,7 @@ export const SCHEDULE_CHANGE_NOTICES: {
   before: string;
   after: string;
   note: string;
-}[] = [
-  {
-    title: "3차 워크숍 운영시간 변경 안내",
-    apology:
-      "홈페이지 공지 오류로 3차 운영시간이 잘못 안내되었습니다. 혼란을 드려 죄송합니다.",
-    session: "3차 · 11/11(수) · 온라인(Zoom) · AI 윤리 가이드 강의계획서 반영 / AI 활용 과정평가 루브릭·CQI",
-    before: "13:30~15:30",
-    after: "15:30~17:30",
-    note: "기존 신청 내역은 그대로 유지되며, Zoom 링크는 D-1(11/10)에 이메일로 발송됩니다. 일정 확인에 양해 부탁드립니다.",
-  },
-];
+}[] = [];
 
 /** AXIS 참여여부(신청 §5.2, 설문 S2) */
 export const AXIS_OPTIONS: { value: AxisParticipant; label: string; short: string }[] = [
