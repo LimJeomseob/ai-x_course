@@ -105,8 +105,17 @@ export function addDaysToDateKey(dateKey: string, days: number): string {
   return kstDateKey(d);
 }
 
-/** 메일·카드용 일시: "11. 5.(목) 13:30~15:30" */
-export function formatSessionDateTime(startIso: string, endIso: string): string {
+/** 메일·카드용 일시: "11. 5.(목) 13:30~15:30" / 영문 "Thu, Nov 5, 13:30–15:30 (KST)" */
+export function formatSessionDateTime(startIso: string, endIso: string, locale: "ko" | "en" = "ko"): string {
+  if (locale === "en") {
+    const date = new Intl.DateTimeFormat("en-US", {
+      timeZone: "Asia/Seoul",
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+    }).format(new Date(startIso));
+    return `${date}, ${formatTime(startIso)}–${formatTime(endIso)} (KST)`;
+  }
   const parts = new Intl.DateTimeFormat("ko-KR", {
     timeZone: "Asia/Seoul",
     month: "numeric",

@@ -4,7 +4,8 @@ import { FormEvent, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { FormField, inputBaseClass } from "@/components/ui/FormField";
 import { formatPhoneInput } from "@/lib/format";
-import { fieldErrors, lookupSchema, type LookupInput } from "@/lib/validation";
+import { useDict, useLocale } from "@/lib/i18n/LocaleProvider";
+import { fieldErrors, getSchemas, type LookupInput } from "@/lib/validation";
 
 interface IdentityFormProps {
   submitLabel: string;
@@ -14,13 +15,15 @@ interface IdentityFormProps {
 
 /** 성명 + 연락처 본인확인 폼(신청내역조회·수료증 발급 공용, PRD §5.3·§5.5) */
 export function IdentityForm({ submitLabel, loading, onSubmit }: IdentityFormProps) {
+  const locale = useLocale();
+  const t = useDict().identity;
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    const parsed = lookupSchema.safeParse({ name, phone });
+    const parsed = getSchemas(locale).lookupSchema.safeParse({ name, phone });
     if (!parsed.success) {
       setErrors(fieldErrors(parsed.error));
       return;
@@ -35,10 +38,10 @@ export function IdentityForm({ submitLabel, loading, onSubmit }: IdentityFormPro
       noValidate
       className="grid gap-4 rounded-xl border border-slate-200 bg-white p-5 shadow-card sm:grid-cols-[1fr_1fr_auto] sm:items-start sm:p-6"
     >
-      <FormField label="성명" required error={errors.name}>
+      <FormField label={t.name} required error={errors.name}>
         {(p) => <input {...p} className={inputBaseClass} value={name} autoComplete="name" onChange={(e) => setName(e.target.value)} />}
       </FormField>
-      <FormField label="연락처" required error={errors.phone}>
+      <FormField label={t.phone} required error={errors.phone}>
         {(p) => (
           <input
             {...p}
@@ -53,7 +56,7 @@ export function IdentityForm({ submitLabel, loading, onSubmit }: IdentityFormPro
         )}
       </FormField>
       <Button type="submit" disabled={loading} className="sm:mt-7">
-        {loading ? "확인 중..." : submitLabel}
+        {loading ? t.checking : submitLabel}
       </Button>
     </form>
   );

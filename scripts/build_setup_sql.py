@@ -63,6 +63,32 @@ STEPS = [
             "from public.workshops where round = 3;",
         ],
     },
+    {
+        "src": "0006_i18n_security.sql",
+        "out": "step6_i18n_security.sql",
+        "title": "한·영 이중언어 컬럼 + 요청 횟수 제한·취소 확인 코드 (※ 새 코드 배포 전에 실행)",
+        "check": [
+            "select",
+            "  (select count(*) from public.workshops where topic_en is not null) as 영문주제_기대값_7,",
+            "  (select count(*) from public.workshop_days where day_label_en is not null) as 영문운영일_기대값_4,",
+            "  (select count(*) from information_schema.columns",
+            "    where table_schema = 'public' and table_name = 'applications' and column_name = 'locale') as 신청언어컬럼_기대값_1,",
+            "  (select count(*) from information_schema.tables",
+            "    where table_schema = 'public' and table_name in ('rate_limits', 'cancel_codes')) as 보안테이블_기대값_2;",
+        ],
+    },
+    {
+        "src": "0007_lockdown_public_writes.sql",
+        "out": "step7_lockdown_public_writes.sql",
+        "title": "공개 역할의 직접 신청·설문 쓰기 차단 (※ 반드시 새 코드 배포 후에 실행)",
+        "check": [
+            "select",
+            "  has_function_privilege('anon', 'public.apply_sessions(jsonb, uuid[])', 'execute') as anon_신청RPC_기대값_false,",
+            "  has_function_privilege('service_role', 'public.apply_sessions(jsonb, uuid[])', 'execute') as 서버_신청RPC_기대값_true,",
+            "  (select count(*) from pg_policies",
+            "    where schemaname = 'public' and policyname = 'survey_insert_public') as 설문_공개정책_기대값_0;",
+        ],
+    },
 ]
 
 for i, step in enumerate(STEPS, start=1):

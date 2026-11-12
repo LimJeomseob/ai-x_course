@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import "./globals.css";
+import { RootDocument } from "@/components/RootDocument";
 import { PROGRAM_NAME } from "@/lib/constants";
 
 const TITLE = `${PROGRAM_NAME} | 경상국립대학교 글로컬대학30`;
@@ -12,6 +12,7 @@ export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://ai-x-course.vercel.app"),
   title: TITLE,
   description: DESCRIPTION,
+  alternates: { languages: { en: "/en" } },
   openGraph: {
     type: "website",
     locale: "ko_KR",
@@ -30,22 +31,5 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <html lang="ko">
-      <head>
-        <link
-          rel="stylesheet"
-          as="style"
-          crossOrigin="anonymous"
-          href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css"
-        />
-      </head>
-      <body className="min-h-screen font-sans antialiased text-slate-900 bg-slate-50">
-        <a href="#main-content" className="skip-link">
-          본문 바로가기
-        </a>
-        {children}
-      </body>
-    </html>
-  );
+  return <RootDocument locale="ko">{children}</RootDocument>;
 }

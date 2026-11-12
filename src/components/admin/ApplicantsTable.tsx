@@ -253,6 +253,7 @@ export function ApplicantsTable() {
       { header: "소속", accessor: (r) => r.affiliation },
       { header: "교번/식별번호", accessor: (r) => r.id_number },
       { header: "AXIS 참여여부", accessor: (r) => axisLabel(r.axis_participant, false) },
+      { header: "신청 언어", accessor: (r) => (r.locale === "en" ? "영어" : "한국어") },
       { header: "연락처", accessor: (r) => formatPhone(r.phone) },
       { header: "이메일", accessor: (r) => r.email },
       { header: "상태", accessor: (r) => r.status },

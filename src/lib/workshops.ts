@@ -6,6 +6,8 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { TABLES, WORKSHOP_PUBLIC_COLUMNS } from "@/lib/db-tables";
 import { UNLIMITED_CAPACITY } from "@/lib/constants";
 import type { Workshop, WorkshopDay } from "@/lib/types";
+import { DEFAULT_LOCALE, type Locale } from "@/lib/i18n/config";
+import { getDict, roundLabel } from "@/lib/i18n/dict";
 
 export type SessionPhase = "확인 중" | "신청 예정" | "모집중" | "마감";
 
@@ -45,6 +47,8 @@ export function deriveSessionStatus(
 
 export interface DayWithSessions extends WorkshopDay {
   sessions: Workshop[];
+  /** 강사 프로필 조회 키(한국어 성명). 영문 화면에서도 원래 값을 유지한다 */
+  instructor_ko?: string;
 }
 
 export interface ProgramData {
@@ -54,8 +58,41 @@ export interface ProgramData {
   availabilityLoaded: boolean;
 }
 
-/** 운영일 + 세션 + 공개 정원현황(get_workshop_availability)을 함께 로드한다. */
-export async function fetchProgramData(): Promise<ProgramData> {
+/** 영문 표시값이 있으면 그것으로, 없으면 한국어 값으로 운영일 표시 필드를 채운다. */
+export function localizeDay<T extends Partial<WorkshopDay>>(day: T, locale: Locale): T {
+  if (locale === "ko") return day;
+  return {
+    ...day,
+    ...(day.day_label !== undefined && { day_label: day.day_label_en || day.day_label }),
+    ...(day.instructor !== undefined && { instructor: day.instructor_en || day.instructor }),
+    ...(day.instructor_title !== undefined && { instructor_title: day.instructor_title_en ?? day.instructor_title }),
+    ...(day.instructor_org !== undefined && { instructor_org: day.instructor_org_en ?? day.instructor_org }),
+    ...(day.location !== undefined && { location: day.location_en || day.location }),
+    ...(day.target !== undefined && { target: day.target_en || day.target }),
+    ...(day.notes !== undefined && { notes: day.notes_en ?? day.notes }),
+    ...(day.link_notice !== undefined && { link_notice: day.link_notice_en ?? day.link_notice }),
+  };
+}
+
+/** 세션 표시 필드(주제·내용·협조사항·차수 표기)를 언어에 맞게 채운다. */
+export function localizeSession<T extends Partial<Workshop>>(session: T, locale: Locale): T {
+  if (locale === "ko") return session;
+  return {
+    ...session,
+    ...(session.round !== undefined && { round_label: roundLabel(locale, session.round, session.round_label) }),
+    ...(session.topic !== undefined && { topic: session.topic_en || session.topic }),
+    ...(session.contents !== undefined && {
+      contents: session.contents_en?.length ? session.contents_en : session.contents,
+    }),
+    ...(session.notes !== undefined && { notes: session.notes_en ?? session.notes }),
+  };
+}
+
+/**
+ * 운영일 + 세션 + 공개 정원현황(get_workshop_availability)을 함께 로드한다.
+ * locale이 en이면 표시 필드를 영문 값으로 바꿔 돌려준다(강사 프로필 연결용 한국어 성명은 instructor_ko에 보존).
+ */
+export async function fetchProgramData(locale: Locale = DEFAULT_LOCALE): Promise<ProgramData> {
   const supabase = createSupabaseBrowserClient();
 
   const [daysRes, workshopsRes, availabilityRes] = await Promise.all([
@@ -69,7 +106,7 @@ export async function fetchProgramData(): Promise<ProgramData> {
   ]);
 
   if (daysRes.error || workshopsRes.error) {
-    throw new Error("세션 정보를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
+    throw new Error(getDict(locale).common.sessionsLoadError);
   }
 
   // applied_count는 bigint → PostgREST가 문자열로 직렬화할 수 있어 숫자로 변환한다.
@@ -80,13 +117,19 @@ export async function fetchProgramData(): Promise<ProgramData> {
   );
 
   return {
-    days: groupSessionsByDay(daysRes.data ?? [], workshopsRes.data ?? []),
+    days: groupSessionsByDay(
+      (daysRes.data ?? []).map((d) => ({ ...localizeDay(d, locale), instructor_ko: d.instructor })),
+      (workshopsRes.data ?? []).map((w) => localizeSession(w, locale))
+    ),
     appliedCountByWorkshopId,
     availabilityLoaded: !availabilityRes.error,
   };
 }
 
-export function groupSessionsByDay(days: WorkshopDay[], workshops: Workshop[]): DayWithSessions[] {
+export function groupSessionsByDay(
+  days: (WorkshopDay & { instructor_ko?: string })[],
+  workshops: Workshop[]
+): DayWithSessions[] {
   return days
     .map((day) => ({
       ...day,
@@ -101,8 +144,16 @@ export function groupSessionsByDay(days: WorkshopDay[], workshops: Workshop[]): 
     });
 }
 
-/** 강사 표기: "박성재 대표(모모에듀)" */
-export function instructorDisplay(day: Pick<WorkshopDay, "instructor" | "instructor_title" | "instructor_org">) {
+/** 강사 표기: "박성재 대표(모모에듀)" / 영문 "Park Seongjae, CEO (MOMOEDU)" */
+export function instructorDisplay(
+  day: Pick<WorkshopDay, "instructor" | "instructor_title" | "instructor_org">,
+  locale: Locale = DEFAULT_LOCALE
+) {
+  if (locale === "en") {
+    const title = day.instructor_title ? `, ${day.instructor_title}` : "";
+    const org = day.instructor_org ? ` (${day.instructor_org})` : "";
+    return `${day.instructor}${title}${org}`;
+  }
   const title = day.instructor_title ? ` ${day.instructor_title}` : "";
   const org = day.instructor_org ? `(${day.instructor_org})` : "";
   return `${day.instructor}${title}${org}`;

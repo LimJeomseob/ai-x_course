@@ -20,6 +20,15 @@ export interface WorkshopDay {
   target: string;
   notes: string; // 운영일 공통 협조사항
   link_notice: string | null;
+  // 영문 표시값(0006) — NULL이면 한국어 값으로 대체 표시
+  day_label_en?: string | null;
+  instructor_en?: string | null;
+  instructor_title_en?: string | null;
+  instructor_org_en?: string | null;
+  location_en?: string | null;
+  target_en?: string | null;
+  notes_en?: string | null;
+  link_notice_en?: string | null;
 }
 
 export interface WorkshopContent {
@@ -43,6 +52,10 @@ export interface Workshop {
   apply_open_at: string;
   notes: string;
   created_at: string;
+  // 영문 표시값(0006) — NULL이면 한국어 값으로 대체 표시
+  topic_en?: string | null;
+  contents_en?: WorkshopContent[] | null;
+  notes_en?: string | null;
 }
 
 /** 관리자 세션 관리 화면 전용(서버 API가 service role로 조회) */
@@ -53,9 +66,10 @@ export interface WorkshopAdminLinks {
   topic: string;
   start_at: string;
   notes: string;
+  notes_en: string | null;
   zoom_link: string | null;
   prelearning_url: string | null;
-  day: Pick<WorkshopDay, "day_code" | "day_label" | "notes" | "is_online">;
+  day: Pick<WorkshopDay, "day_code" | "day_label" | "notes" | "notes_en" | "is_online">;
 }
 
 export type ApplicationStatus = "신청완료" | "대기" | "취소" | "이수";
@@ -79,6 +93,8 @@ export interface Application {
   phone: string;
   phone_digits: string;
   email: string;
+  /** 신청 화면 언어(0006) — 안내 메일 언어 */
+  locale?: "ko" | "en";
   consent: boolean;
   status: ApplicationStatus;
   cert_issued: boolean;
@@ -200,21 +216,21 @@ export interface CertificateTemplate {
   texts: CertificateTemplateText[];
 }
 
-/** POST /api/issue-certificate 응답 */
+/** POST /api/issue-certificate 응답 — PDF는 서버가 생성·보관하고 base64로 내려 준다 */
 export interface IssueCertificateResponse {
   certNo: string;
-  issuedAt: string;
   reissueCount: number;
-  name: string;
-  affiliation: string;
   round: number;
-  roundLabel: string;
-  topic: string;
-  startAt: string;
-  endAt: string;
-  template: CertificateTemplate;
-  upload: { path: string; token: string };
+  /** 수료증 PDF(base64) */
+  pdfBase64: string;
+  /** Storage 보관 성공 여부(실패해도 PDF는 내려 준다) */
+  stored: boolean;
 }
+
+/** POST /api/cancel-application 응답 — 1단계(코드 발송) 또는 2단계(취소 완료) */
+export type CancelApplicationResponse =
+  | { step: "code_sent"; maskedEmail: string }
+  | { step: "cancelled"; applicationId: string };
 
 /** POST /api/lookup 응답 항목 */
 export interface LookupResultItem {

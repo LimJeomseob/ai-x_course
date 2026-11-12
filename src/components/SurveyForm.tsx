@@ -4,19 +4,12 @@ import { FormEvent, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { FormField, inputBaseClass } from "@/components/ui/FormField";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
-import { TABLES } from "@/lib/db-tables";
-import {
-  AWARENESS_PATH_OPTIONS,
-  AXIS_OPTIONS,
-  COLLEGE_GROUP_OPTIONS,
-  LIKERT_SCALE_LABELS,
-  SURVEY_LIKERT_QUESTIONS,
-  SURVEY_OPEN_QUESTIONS,
-  type LikertKey,
-} from "@/lib/constants";
+import { publicPost } from "@/lib/adminApi";
+import { SURVEY_LIKERT_QUESTIONS, type LikertKey } from "@/lib/constants";
 import { formatTimeRange } from "@/lib/format";
-import { fieldErrors, surveySchema } from "@/lib/validation";
+import { getContent } from "@/lib/i18n/content";
+import { useDict, useLocale } from "@/lib/i18n/LocaleProvider";
+import { fieldErrors, getSchemas } from "@/lib/validation";
 import { fetchProgramData, type DayWithSessions } from "@/lib/workshops";
 
 type Answers = {
@@ -59,12 +52,13 @@ function RadioGroup({
   error?: string;
   onChange: (v: string) => void;
 }) {
+  const requiredText = useDict().common.required;
   return (
     <fieldset aria-describedby={error ? `${name}-error` : undefined}>
       <legend className="text-sm font-semibold text-slate-800">
         {legend}
         <span className="ml-1 text-red-600" aria-hidden="true">*</span>
-        <span className="sr-only">(필수)</span>
+        <span className="sr-only">{requiredText}</span>
       </legend>
       <div className="mt-2 flex flex-wrap gap-x-5 gap-y-2">
         {options.map((o) => (
@@ -93,6 +87,10 @@ function RadioGroup({
 /** 만족도조사(PRD §5.4, 문항 v0.9) */
 export function SurveyForm() {
   const searchParams = useSearchParams();
+  const locale = useLocale();
+  const dict = useDict();
+  const t = dict.survey;
+  const content = getContent(locale);
   const [days, setDays] = useState<DayWithSessions[]>([]);
   const [answers, setAnswers] = useState<Answers>(EMPTY);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -101,10 +99,10 @@ export function SurveyForm() {
   const [done, setDone] = useState(false);
 
   useEffect(() => {
-    fetchProgramData()
+    fetchProgramData(locale)
       .then((d) => setDays(d.days))
-      .catch(() => setSubmitError("세션 정보를 불러오지 못했습니다. 새로고침해 주세요."));
-  }, []);
+      .catch(() => setSubmitError(dict.common.sessionsLoadError));
+  }, [locale, dict]);
 
   useEffect(() => {
     const round = Number(searchParams.get("round"));
@@ -119,7 +117,7 @@ export function SurveyForm() {
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setSubmitError(null);
-    const parsed = surveySchema.safeParse({
+    const parsed = getSchemas(locale).surveySchema.safeParse({
       ...answers,
       workshopRound: answers.workshopRound === "" ? 0 : answers.workshopRound,
       ...Object.fromEntries(
@@ -130,48 +128,25 @@ export function SurveyForm() {
       setErrors(fieldErrors(parsed.error));
       return;
     }
-    const v = parsed.data;
-    const session = days.flatMap((d) => d.sessions).find((s) => s.round === v.workshopRound);
-    if (!session) {
-      setErrors({ workshopRound: "참여 세션을 선택해 주세요." });
-      return;
-    }
-
+    // 제출은 서버(/api/survey)가 요청 횟수 제한·검증 후 저장한다(세션 표기는 서버가 DB에서 채운다).
     setSubmitting(true);
-    const { error } = await createSupabaseBrowserClient()
-      .from(TABLES.SURVEY)
-      .insert({
-        workshop_round: v.workshopRound,
-        workshop: `${session.round_label} · ${session.topic}`,
-        axis_participant: v.axisParticipant,
-        college_group: v.collegeGroup,
-        awareness_path: v.awarenessPath,
-        q1: v.q1,
-        q2: v.q2,
-        q3: v.q3,
-        q4: v.q4,
-        q5: v.q5,
-        q6: v.q6,
-        q7: v.q7,
-        o1: v.o1,
-        o2: v.o2,
-      });
-    setSubmitting(false);
-    if (error) {
-      setSubmitError("제출 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.");
-      return;
+    try {
+      await publicPost("/api/survey", { ...parsed.data, locale }, dict.api.surveyFailed);
+      setDone(true);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : dict.api.surveyFailed);
+    } finally {
+      setSubmitting(false);
     }
-    setDone(true);
-    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   if (done) {
     return (
       <div role="status" className="rounded-2xl border border-emerald-200 bg-emerald-50 p-6">
-        <h2 className="text-xl font-bold text-emerald-900">응답해 주셔서 감사합니다</h2>
+        <h2 className="text-xl font-bold text-emerald-900">{t.doneTitle}</h2>
         <p className="mt-2 text-sm text-emerald-800">
-          보내주신 의견은 차기 워크숍 기획과 AI-X 교과목 지원 개선에 활용하겠습니다. 다른 세션에 참여하셨다면 세션별로 한 번씩
-          응답해 주세요.
+          {t.doneBody}
         </p>
         <Button
           type="button"
@@ -182,7 +157,7 @@ export function SurveyForm() {
             setDone(false);
           }}
         >
-          다른 세션 응답하기
+          {t.another}
         </Button>
       </div>
     );
@@ -191,7 +166,7 @@ export function SurveyForm() {
   return (
     <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-6">
       <section className="flex flex-col gap-5 rounded-xl border border-slate-200 bg-white p-5 shadow-card sm:p-6">
-        <FormField label="참여 세션" required error={errors.workshopRound} hint="세션별로 1회씩 응답해 주세요.">
+        <FormField label={t.session} required error={errors.workshopRound} hint={t.sessionHint}>
           {(p) => (
             <select
               {...p}
@@ -199,7 +174,7 @@ export function SurveyForm() {
               value={answers.workshopRound}
               onChange={(e) => set("workshopRound", e.target.value ? Number(e.target.value) : "")}
             >
-              <option value="">세션을 선택해 주세요</option>
+              <option value="">{t.sessionPlaceholder}</option>
               {days.map((day) => (
                 <optgroup key={day.id} label={`${day.day_label} · ${day.instructor} ${day.instructor_title}`}>
                   {day.sessions.map((s) => (
@@ -214,24 +189,24 @@ export function SurveyForm() {
         </FormField>
         <RadioGroup
           name="axisParticipant"
-          legend="AI-X 교과목 개발·인증 신청 여부"
-          options={AXIS_OPTIONS.map((o) => ({ value: o.value, label: o.value === "axis" ? "AXIS 참여 교원" : o.value === "faculty" ? "그 외 전임교원" : "기타" }))}
+          legend={t.axisLegend}
+          options={content.axisOptions.map((o) => ({ value: o.value, label: o.surveyLabel }))}
           value={answers.axisParticipant}
           error={errors.axisParticipant}
           onChange={(v) => set("axisParticipant", v)}
         />
         <RadioGroup
           name="collegeGroup"
-          legend="소속 계열"
-          options={COLLEGE_GROUP_OPTIONS.map((o) => ({ value: o, label: o }))}
+          legend={t.collegeLegend}
+          options={content.collegeGroupOptions}
           value={answers.collegeGroup}
           error={errors.collegeGroup}
           onChange={(v) => set("collegeGroup", v)}
         />
         <RadioGroup
           name="awarenessPath"
-          legend="워크숍을 알게 된 경로"
-          options={AWARENESS_PATH_OPTIONS.map((o) => ({ value: o, label: o }))}
+          legend={t.awarenessLegend}
+          options={content.awarenessOptions}
           value={answers.awarenessPath}
           error={errors.awarenessPath}
           onChange={(v) => set("awarenessPath", v)}
@@ -239,13 +214,13 @@ export function SurveyForm() {
       </section>
 
       <section className="flex flex-col gap-5 rounded-xl border border-slate-200 bg-white p-5 shadow-card sm:p-6">
-        <p className="text-sm text-slate-500">1점(전혀 그렇지 않다) ~ 5점(매우 그렇다)</p>
-        {SURVEY_LIKERT_QUESTIONS.map((q) => (
+        <p className="text-sm text-slate-500">{t.scaleGuide}</p>
+        {content.likertQuestions.map((q) => (
           <RadioGroup
             key={q.key}
             name={q.key}
             legend={`${q.key.toUpperCase()}. ${q.text}`}
-            options={LIKERT_SCALE_LABELS.map((label, i) => ({ value: String(i + 1), label }))}
+            options={content.likertLabels.map((label, i) => ({ value: String(i + 1), label }))}
             value={answers[q.key] === "" ? "" : String(answers[q.key])}
             error={errors[q.key]}
             onChange={(v) => set(q.key, Number(v))}
@@ -254,8 +229,8 @@ export function SurveyForm() {
       </section>
 
       <section className="flex flex-col gap-5 rounded-xl border border-slate-200 bg-white p-5 shadow-card sm:p-6">
-        {SURVEY_OPEN_QUESTIONS.map((q) => (
-          <FormField key={q.key} label={`${q.key.toUpperCase()}. ${q.text} (선택)`} error={errors[q.key]} hint={`${answers[q.key].length}/${q.maxLength}자`}>
+        {content.openQuestions.map((q) => (
+          <FormField key={q.key} label={`${q.key.toUpperCase()}. ${q.text} ${t.optional}`} error={errors[q.key]} hint={t.charCount(answers[q.key].length, q.maxLength)}>
             {(p) => (
               <textarea
                 {...p}
@@ -276,7 +251,7 @@ export function SurveyForm() {
         </p>
       )}
       <Button type="submit" size="lg" disabled={submitting} className="self-center">
-        {submitting ? "제출 중..." : "만족도조사 제출"}
+        {submitting ? t.submitting : t.submit}
       </Button>
     </form>
   );

@@ -7,10 +7,13 @@ import clsx from "clsx";
 import { Button } from "@/components/ui/Button";
 import { FormField, inputBaseClass } from "@/components/ui/FormField";
 import { LocationLink } from "@/components/LocationLink";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
-import { AXIS_OPTIONS } from "@/lib/constants";
+import { publicPost } from "@/lib/adminApi";
 import { formatPhoneInput, formatTimeRange } from "@/lib/format";
-import { applicationSchema, fieldErrors } from "@/lib/validation";
+import { localePath, type Locale } from "@/lib/i18n/config";
+import { getContent } from "@/lib/i18n/content";
+import type { Dict } from "@/lib/i18n/dict";
+import { useDict, useLocale } from "@/lib/i18n/LocaleProvider";
+import { fieldErrors, getSchemas } from "@/lib/validation";
 import {
   deriveSessionStatus,
   fetchProgramData,
@@ -40,21 +43,25 @@ const EMPTY_FORM: FormState = {
   consent: false,
 };
 
-function statusSuffix(status: SessionStatus): string {
-  if (status.phase === "마감") return "(마감)";
-  if (status.phase === "신청 예정") return "(신청 예정)";
-  if (status.phase === "확인 중") return "(확인 중)";
-  return status.unlimited ? "(제한 없음)" : `(잔여 ${status.remaining}명)`;
+function statusSuffix(status: SessionStatus, t: Dict["apply"]): string {
+  if (status.phase === "마감") return t.suffixClosed;
+  if (status.phase === "신청 예정") return t.suffixUpcoming;
+  if (status.phase === "확인 중") return t.suffixChecking;
+  return status.unlimited ? t.suffixUnlimited : t.suffixRemaining(status.remaining);
 }
 
-function dayHeader(day: DayWithSessions): string {
-  const title = day.instructor_title ? ` ${day.instructor_title}` : "";
-  return `${day.day_label} · ${day.instructor}${title} · ${day.level} · ${day.target}`;
+function dayHeader(day: DayWithSessions, locale: Locale, dict: Dict): string {
+  const title = day.instructor_title ? `${locale === "en" ? "," : ""} ${day.instructor_title}` : "";
+  return `${day.day_label} · ${day.instructor}${title} · ${dict.level[day.level] ?? day.level} · ${day.target}`;
 }
 
 /** 신청 탭(PRD §5.2) — 운영일별 그룹 체크박스로 세션 복수 선택 후 1회 제출 */
 export function ApplicationForm() {
   const searchParams = useSearchParams();
+  const locale = useLocale();
+  const dict = useDict();
+  const t = dict.apply;
+  const content = getContent(locale);
   const [data, setData] = useState<ProgramData | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -66,10 +73,10 @@ export function ApplicationForm() {
   const [now] = useState(() => Date.now());
 
   useEffect(() => {
-    fetchProgramData()
+    fetchProgramData(locale)
       .then(setData)
       .catch((e: Error) => setLoadError(e.message));
-  }, []);
+  }, [locale]);
 
   const statusById = useMemo(() => {
     const map = new Map<string, SessionStatus>();
@@ -124,40 +131,33 @@ export function ApplicationForm() {
     e.preventDefault();
     setSubmitError(null);
 
-    const parsed = applicationSchema.safeParse({ ...form, workshopIds: Array.from(selected) });
+    const parsed = getSchemas(locale).applicationSchema.safeParse({ ...form, workshopIds: Array.from(selected) });
     if (!parsed.success) {
       setErrors(fieldErrors(parsed.error));
       return;
     }
 
+    // 신청은 서버(/api/apply)가 요청 횟수 제한·검증 후 처리한다(브라우저의 DB 직접 호출 없음).
     setSubmitting(true);
-    const v = parsed.data;
-    const { data: response, error } = await createSupabaseBrowserClient().rpc("apply_sessions", {
-      p_payload: {
-        name: v.name,
-        affiliation: v.affiliation,
-        id_number: v.idNumber,
-        axis_participant: v.axisParticipant,
-        phone: v.phone,
-        email: v.email,
-        consent: v.consent,
-      },
-      p_session_ids: v.workshopIds,
-    });
-    setSubmitting(false);
-
-    if (error || !response) {
-      setSubmitError(error?.message ?? "신청 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.");
-      return;
+    try {
+      const response = await publicPost<ApplySessionsResponse>(
+        "/api/apply",
+        { ...parsed.data, locale },
+        dict.api.applyFailed
+      );
+      setResult(response);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : dict.api.applyFailed);
+    } finally {
+      setSubmitting(false);
     }
-    setResult(response as ApplySessionsResponse);
-    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   function resetForAnother() {
     setResult(null);
     setSelected(new Set());
-    fetchProgramData().then(setData).catch(() => null);
+    fetchProgramData(locale).then(setData).catch(() => null);
   }
 
   if (loadError) {
@@ -170,7 +170,7 @@ export function ApplicationForm() {
   if (!data) {
     return (
       <p role="status" className="text-sm text-slate-500">
-        세션 정보를 불러오는 중...
+        {dict.common.sessionsLoading}
       </p>
     );
   }
@@ -186,11 +186,12 @@ export function ApplicationForm() {
         aria-describedby={errors.workshopIds ? "workshop-error" : undefined}
       >
         <legend className="text-base font-bold text-slate-900">
-          세션(워크숍) 선택<span className="ml-1 text-red-600" aria-hidden="true">*</span>
-          <span className="sr-only">(필수, 1개 이상)</span>
+          {t.legendSessions}
+          <span className="ml-1 text-red-600" aria-hidden="true">*</span>
+          <span className="sr-only">{t.legendSessionsSr}</span>
         </legend>
         <p className="text-sm text-slate-500">
-          같은 날 세션은 기초→심화로 연계 구성되어 있어 함께 신청을 권장합니다(필수 아님). 마감·오픈 전 세션은 선택할 수 없습니다.
+          {t.sessionsHint}
         </p>
 
         {data.days.map((day) => {
@@ -198,7 +199,7 @@ export function ApplicationForm() {
           const showLinkHint = day.sessions.length > 1 && chosen === 1;
           return (
             <div key={day.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-card">
-              <p className="text-sm font-bold text-brand">{dayHeader(day)}</p>
+              <p className="text-sm font-bold text-brand">{dayHeader(day, locale, dict)}</p>
               <ul className="mt-3 flex flex-col gap-2">
                 {day.sessions.map((s: Workshop) => {
                   const status = statusById.get(s.id)!;
@@ -227,7 +228,7 @@ export function ApplicationForm() {
                         />
                         <span>
                           <strong>{s.round_label}</strong> {formatTimeRange(s.start_at, s.end_at)} · {s.topic}{" "}
-                          <span className={clsx("font-semibold", disabled ? "" : "text-accent")}>{statusSuffix(status)}</span>
+                          <span className={clsx("font-semibold", disabled ? "" : "text-accent")}>{statusSuffix(status, t)}</span>
                         </span>
                       </label>
                     </li>
@@ -236,7 +237,7 @@ export function ApplicationForm() {
               </ul>
               {showLinkHint && (
                 <p className="mt-2 text-sm font-medium text-amber-700" role="status">
-                  💡 같은 날 연계 세션도 함께 신청하시길 권장합니다(제출은 가능합니다).
+                  {t.linkHint}
                 </p>
               )}
             </div>
@@ -250,7 +251,7 @@ export function ApplicationForm() {
 
         {selectedDays.length > 0 && (
           <div className="rounded-xl border border-brand/20 bg-brand/5 p-4 text-sm text-slate-700" aria-live="polite">
-            <p className="font-bold text-brand">선택한 세션 안내</p>
+            <p className="font-bold text-brand">{t.selectedInfo}</p>
             <ul className="mt-2 flex flex-col gap-1.5">
               {selectedDays.map((day) => (
                 <li key={day.id}>
@@ -258,8 +259,8 @@ export function ApplicationForm() {
                   {day.sessions
                     .filter((s) => selected.has(s.id))
                     .map((s) => s.round_label)
-                    .join("·")}{" "}
-                  — 장소: <LocationLink location={day.location} url={day.location_url} isOnline={day.is_online} />
+                    .join(locale === "en" ? ", " : "·")}{" "}
+                  — {dict.common.place}: <LocationLink location={day.location} url={day.location_url} isOnline={day.is_online} />
                 </li>
               ))}
             </ul>
@@ -268,25 +269,25 @@ export function ApplicationForm() {
       </fieldset>
 
       <fieldset className="flex flex-col gap-5 rounded-xl border border-slate-200 bg-white p-5 shadow-card sm:p-6">
-        <legend className="px-1 text-base font-bold text-slate-900">신청자 정보</legend>
+        <legend className="px-1 text-base font-bold text-slate-900">{t.applicantInfo}</legend>
 
         <div className="grid gap-5 sm:grid-cols-2">
-          <FormField label="성명" required error={errors.name}>
+          <FormField label={t.name} required error={errors.name}>
             {(p) => (
               <input {...p} className={inputBaseClass} value={form.name} maxLength={50} autoComplete="name" onChange={(e) => update("name", e.target.value)} />
             )}
           </FormField>
-          <FormField label="소속" required error={errors.affiliation}>
+          <FormField label={t.affiliation} required error={errors.affiliation}>
             {(p) => (
-              <input {...p} className={inputBaseClass} value={form.affiliation} maxLength={100} placeholder="예: 인문대학 OO학과" onChange={(e) => update("affiliation", e.target.value)} />
+              <input {...p} className={inputBaseClass} value={form.affiliation} maxLength={100} placeholder={t.affiliationPlaceholder} onChange={(e) => update("affiliation", e.target.value)} />
             )}
           </FormField>
-          <FormField label="교번/직번/학번/생년월일" required error={errors.idNumber}>
+          <FormField label={t.idNumber} required error={errors.idNumber}>
             {(p) => (
               <input {...p} className={inputBaseClass} value={form.idNumber} maxLength={50} onChange={(e) => update("idNumber", e.target.value)} />
             )}
           </FormField>
-          <FormField label="연락처" required error={errors.phone} hint="휴대폰 번호 (예: 010-1234-5678)">
+          <FormField label={t.phone} required error={errors.phone} hint={t.phoneHint}>
             {(p) => (
               <input
                 {...p}
@@ -301,7 +302,7 @@ export function ApplicationForm() {
             )}
           </FormField>
           <div className="sm:col-span-2">
-            <FormField label="이메일" required error={errors.email} hint="신청 결과·운영 안내·Zoom 링크가 이 주소로 발송됩니다.">
+            <FormField label={t.email} required error={errors.email} hint={t.emailHint}>
               {(p) => (
                 <input {...p} type="email" autoComplete="email" className={inputBaseClass} value={form.email} onChange={(e) => update("email", e.target.value)} />
               )}
@@ -311,11 +312,12 @@ export function ApplicationForm() {
 
         <fieldset aria-describedby={errors.axisParticipant ? "axis-error" : undefined}>
           <legend className="text-sm font-semibold text-slate-800">
-            AI-X 교과목 개발·인증 신청 여부<span className="ml-1 text-red-600" aria-hidden="true">*</span>
-            <span className="sr-only">(필수)</span>
+            {t.axisLegend}
+            <span className="ml-1 text-red-600" aria-hidden="true">*</span>
+            <span className="sr-only">{dict.common.required}</span>
           </legend>
           <div className="mt-2 flex flex-col gap-2">
-            {AXIS_OPTIONS.map((o) => (
+            {content.axisOptions.map((o) => (
               <label key={o.value} className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
                 <input
                   type="radio"
@@ -337,12 +339,11 @@ export function ApplicationForm() {
         </fieldset>
 
         <div className="rounded-lg bg-slate-50 p-4 text-sm text-slate-600">
-          <p className="font-semibold text-slate-800">개인정보 수집·이용 안내</p>
+          <p className="font-semibold text-slate-800">{t.privacyTitle}</p>
           <ul className="mt-2 flex list-disc flex-col gap-1 pl-5">
-            <li>수집항목: 성명, 소속, 교번/직번/학번/생년월일, AI-X 교과목 개발·인증 신청 여부, 연락처, 이메일</li>
-            <li>수집목적: 워크숍 신청·운영, 수료증 발급, 안내 메일 발송</li>
-            <li>보유기간: 워크숍 종료 후 1년 또는 관계 법령에서 정한 기간</li>
-            <li>동의를 거부할 수 있으나, 거부 시 워크숍 신청이 제한됩니다.</li>
+            {t.privacyItems.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
           </ul>
           <label className="mt-3 flex cursor-pointer items-center gap-2 font-semibold text-slate-800">
             <input
@@ -352,7 +353,7 @@ export function ApplicationForm() {
               aria-describedby={errors.consent ? "consent-error" : undefined}
               onChange={(e) => update("consent", e.target.checked)}
             />
-            개인정보 수집·이용에 동의합니다. (필수)
+            {t.consentLabel}
           </label>
           {errors.consent && (
             <p id="consent-error" role="alert" className="mt-1 text-xs font-medium text-red-600">
@@ -369,7 +370,7 @@ export function ApplicationForm() {
       )}
 
       <Button type="submit" size="lg" disabled={submitting} className="self-center">
-        {submitting ? "신청 처리 중..." : `선택한 ${selected.size}개 세션 신청하기`}
+        {submitting ? t.submitting : t.submit(selected.size)}
       </Button>
     </form>
   );
@@ -384,6 +385,8 @@ function ApplyResult({
   days: DayWithSessions[];
   onAnother: () => void;
 }) {
+  const locale = useLocale();
+  const t = useDict().apply;
   const sessionById = new Map(days.flatMap((d) => d.sessions.map((s) => [s.id, { day: d, session: s }] as const)));
   const succeeded = result.results.filter((r) => r.ok);
   const failed = result.results.filter((r) => !r.ok);
@@ -392,48 +395,54 @@ function ApplyResult({
     <section aria-live="polite" className="flex flex-col gap-6">
       {succeeded.length > 0 ? (
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-6">
-          <h2 className="text-xl font-bold text-emerald-900">신청이 완료되었습니다</h2>
+          <h2 className="text-xl font-bold text-emerald-900">{t.doneTitle}</h2>
           <ul className="mt-3 flex flex-col gap-1.5 text-sm text-emerald-900 sm:text-base">
             {succeeded.map((r) => {
               const info = sessionById.get(r.workshop_id);
               return (
                 <li key={r.workshop_id}>
-                  ✔ {info?.day.day_label} {r.round_label}{" "}
-                  {info ? formatTimeRange(info.session.start_at, info.session.end_at) : ""} · {r.topic}
+                  ✔ {info?.day.day_label} {info?.session.round_label ?? r.round_label}{" "}
+                  {info ? formatTimeRange(info.session.start_at, info.session.end_at) : ""} ·{" "}
+                  {info?.session.topic ?? r.topic}
                 </li>
               );
             })}
           </ul>
-          <p className="mt-3 text-sm text-emerald-800">신청 결과 안내 메일은 매일 18:00에 일괄 발송됩니다.</p>
+          <p className="mt-3 text-sm text-emerald-800">{t.mailNote}</p>
         </div>
       ) : (
         <div className="rounded-2xl border border-red-200 bg-red-50 p-6">
-          <h2 className="text-xl font-bold text-red-900">신청되지 않았습니다</h2>
+          <h2 className="text-xl font-bold text-red-900">{t.failTitle}</h2>
         </div>
       )}
 
       {failed.length > 0 && (
         <div className="rounded-2xl border border-red-200 bg-white p-6">
-          <h3 className="font-bold text-red-800">신청되지 않은 세션</h3>
+          <h3 className="font-bold text-red-800">{t.failedListTitle}</h3>
           <ul className="mt-2 flex flex-col gap-1.5 text-sm text-slate-700">
-            {failed.map((r) => (
-              <li key={r.workshop_id}>
-                ✖ {r.round_label ?? "알 수 없는 세션"} {r.topic ? `· ${r.topic}` : ""} — <strong className="text-red-700">{r.message}</strong>
-              </li>
-            ))}
+            {failed.map((r) => {
+              const info = sessionById.get(r.workshop_id);
+              const label = info?.session.round_label ?? r.round_label ?? t.unknownSession;
+              const topic = info?.session.topic ?? r.topic;
+              return (
+                <li key={r.workshop_id}>
+                  ✖ {label} {topic ? `· ${topic}` : ""} — <strong className="text-red-700">{r.message}</strong>
+                </li>
+              );
+            })}
           </ul>
         </div>
       )}
 
       <div className="flex flex-col gap-3 sm:flex-row">
         <Link
-          href="/lookup"
+          href={localePath(locale, "/lookup")}
           className="inline-flex items-center justify-center rounded-lg bg-accent px-5 py-2.5 font-bold text-white shadow-card hover:bg-brand"
         >
-          신청내역조회로 이동
+          {t.toLookup}
         </Link>
         <Button type="button" variant="outline" onClick={onAnother}>
-          다른 세션 추가 신청
+          {t.another}
         </Button>
       </div>
     </section>

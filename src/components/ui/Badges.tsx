@@ -1,4 +1,7 @@
+"use client";
+
 import clsx from "clsx";
+import { useDict } from "@/lib/i18n/LocaleProvider";
 import type { WorkshopLevel } from "@/lib/types";
 import type { SessionPhase } from "@/lib/workshops";
 
@@ -9,9 +12,10 @@ const LEVEL_CLASSES: Record<WorkshopLevel, string> = {
 };
 
 export function LevelBadge({ level }: { level: WorkshopLevel }) {
+  const labels = useDict().level;
   return (
     <span className={clsx("inline-flex items-center rounded-full px-2.5 py-1 text-xs font-bold", LEVEL_CLASSES[level])}>
-      {level}
+      {labels[level] ?? level}
     </span>
   );
 }
@@ -24,9 +28,10 @@ const PHASE_CLASSES: Record<SessionPhase, string> = {
 };
 
 export function PhaseBadge({ phase }: { phase: SessionPhase }) {
+  const labels = useDict().phase;
   return (
     <span className={clsx("inline-flex items-center rounded-full px-2.5 py-1 text-xs font-bold", PHASE_CLASSES[phase])}>
-      {phase}
+      {labels[phase] ?? phase}
     </span>
   );
 }

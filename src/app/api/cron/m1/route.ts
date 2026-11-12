@@ -16,6 +16,6 @@ export async function GET(req: Request) {
     return NextResponse.json(outcome);
   } catch (err) {
     console.error("[cron/m1] 실패:", err);
-    return jsonError(err instanceof Error ? err.message : "cron 실행 실패", 500);
+    return jsonError("cron 실행 실패 — 서버 로그를 확인해 주세요.", 500);
   }
 }

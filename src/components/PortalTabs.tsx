@@ -3,39 +3,38 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import clsx from "clsx";
+import { localePath, stripLocale } from "@/lib/i18n/config";
+import { useDict, useLocale } from "@/lib/i18n/LocaleProvider";
 
 const TABS = [
-  { href: "/", label: "소개" },
-  { href: "/apply", label: "신청" },
-  { href: "/lookup", label: "신청내역조회" },
-  { href: "/survey", label: "만족도조사" },
-  { href: "/certificate", label: "수료증 발급" },
-];
+  { path: "/", key: "intro" },
+  { path: "/apply", key: "apply" },
+  { path: "/lookup", key: "lookup" },
+  { path: "/survey", key: "survey" },
+  { path: "/certificate", key: "certificate" },
+] as const;
 
 export function PortalTabs() {
-  const pathname = usePathname();
+  const current = stripLocale(usePathname());
+  const locale = useLocale();
+  const t = useDict().tabs;
 
   return (
-    <nav
-      aria-label="신청 포털 탭 메뉴"
-      className="border-b border-slate-200 bg-white"
-    >
+    <nav aria-label={t.navAria} className="border-b border-slate-200 bg-white">
       <ul className="mx-auto flex max-w-5xl overflow-x-auto px-2 sm:px-6" role="list">
         {TABS.map((tab) => {
-          const isActive = pathname === tab.href;
+          const isActive = current === tab.path;
           return (
-            <li key={tab.href}>
+            <li key={tab.path}>
               <Link
-                href={tab.href}
+                href={localePath(locale, tab.path)}
                 aria-current={isActive ? "page" : undefined}
                 className={clsx(
                   "block whitespace-nowrap border-b-[3px] px-4 py-3 text-sm font-semibold transition-colors sm:text-base",
-                  isActive
-                    ? "border-accent text-brand"
-                    : "border-transparent text-slate-500 hover:text-brand"
+                  isActive ? "border-accent text-brand" : "border-transparent text-slate-500 hover:text-brand"
                 )}
               >
-                {tab.label}
+                {t[tab.key]}
               </Link>
             </li>
           );

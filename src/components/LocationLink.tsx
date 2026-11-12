@@ -1,4 +1,7 @@
+"use client";
+
 import clsx from "clsx";
+import { useDict } from "@/lib/i18n/LocaleProvider";
 
 interface LocationLinkProps {
   location: string;
@@ -12,8 +15,9 @@ interface LocationLinkProps {
  * 온라인 세션은 지도 링크 없이 "온라인(Zoom)" 텍스트만 표시한다(Zoom 링크는 메일로만 발송).
  */
 export function LocationLink({ location, url, isOnline, className }: LocationLinkProps) {
+  const t = useDict().common;
   if (isOnline || !url) {
-    return <span className={className}>{isOnline ? "온라인(Zoom)" : location}</span>;
+    return <span className={className}>{isOnline ? t.online : location}</span>;
   }
   return (
     <a
@@ -27,7 +31,7 @@ export function LocationLink({ location, url, isOnline, className }: LocationLin
         <path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z" />
         <path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z" />
       </svg>
-      <span className="sr-only">(새 창에서 네이버 지도 열기)</span>
+      <span className="sr-only">{t.mapSr}</span>
     </a>
   );
 }
