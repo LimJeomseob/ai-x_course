@@ -1,5 +1,8 @@
+"use client";
+
 import { ReactNode, useId } from "react";
 import clsx from "clsx";
+import { useDict } from "@/lib/i18n/LocaleProvider";
 
 interface FormFieldProps {
   label: string;
@@ -12,6 +15,7 @@ interface FormFieldProps {
 /** 접근성 고려 폼 필드 래퍼: label-input 연결, 에러/힌트를 aria-describedby로 연결 */
 export function FormField({ label, required, error, hint, children }: FormFieldProps) {
   const id = useId();
+  const requiredText = useDict().common.required;
   const hintId = hint ? `${id}-hint` : undefined;
   const errorId = error ? `${id}-error` : undefined;
   const describedBy = [hintId, errorId].filter(Boolean).join(" ") || undefined;
@@ -25,7 +29,7 @@ export function FormField({ label, required, error, hint, children }: FormFieldP
             *
           </span>
         )}
-        {required && <span className="sr-only">(필수)</span>}
+        {required && <span className="sr-only">{requiredText}</span>}
       </label>
       {children({ id, "aria-describedby": describedBy, "aria-invalid": !!error })}
       {hint && (

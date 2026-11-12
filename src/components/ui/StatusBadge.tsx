@@ -1,4 +1,7 @@
+"use client";
+
 import clsx from "clsx";
+import { useDict } from "@/lib/i18n/LocaleProvider";
 import type { ApplicationStatus } from "@/lib/types";
 
 const STATUS_CLASSES: Record<ApplicationStatus, string> = {
@@ -9,6 +12,7 @@ const STATUS_CLASSES: Record<ApplicationStatus, string> = {
 };
 
 export function StatusBadge({ status }: { status: ApplicationStatus }) {
+  const labels = useDict().status;
   return (
     <span
       className={clsx(
@@ -16,7 +20,7 @@ export function StatusBadge({ status }: { status: ApplicationStatus }) {
         STATUS_CLASSES[status]
       )}
     >
-      {status}
+      {labels[status] ?? status}
     </span>
   );
 }

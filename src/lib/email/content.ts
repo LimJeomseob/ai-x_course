@@ -4,7 +4,9 @@
 import { CONTACT_EMAIL, CONTACT_PHONE } from "@/lib/constants";
 import { formatSessionDateTime, formatTime, formatTimeRange } from "@/lib/format";
 import type { EmailType } from "@/lib/types";
-import { PAID_ACCOUNT_NOTICE, STATUS_MESSAGES, escapeHtml, type RenderVars } from "./templates";
+import type { Locale } from "@/lib/i18n/config";
+import { getDict } from "@/lib/i18n/dict";
+import { PAID_ACCOUNT_NOTICE, STATUS_MESSAGES, STATUS_MESSAGES_EN, escapeHtml, type RenderVars } from "./templates";
 
 export interface MailSession {
   applicationId: string;
@@ -36,28 +38,97 @@ export interface StatusChange {
   to: string;
 }
 
-const CANCEL_GUIDE =
-  "포털 [신청내역조회] → 성명·연락처 입력 → 해당 세션 [신청 취소] (세션 시작 전까지 가능, 같은 날 다른 세션은 영향 없음)";
-
-const PRACTICE_NOTES = [
-  "전산 실습실로 개인 노트북은 미지참해도 됩니다.",
-  "구글 계정을 확인하시고 사전 로그인 여부를 확인해 주세요.",
-  PAID_ACCOUNT_NOTICE,
-];
-
-const ONLINE_NOTE = "온라인(3차) 세션의 Zoom 링크는 D-1에 이메일로 발송되며, 카메라·마이크 사용을 권장합니다.";
+/** 메일 본문에 들어가는 고정 문구(언어별). 치환 변수 이름은 언어와 무관하게 한국어 키를 쓴다. */
+const STRINGS = {
+  ko: {
+    online: "온라인(Zoom)",
+    map: "지도",
+    th: { round: "차수", topic: "주제", when: "일시", place: "장소", status: "상태", before: "변경 전", after: "변경 후" },
+    cancelGuide:
+      "포털 [신청내역조회] → 성명·연락처 입력 → 해당 세션 [신청 취소] → 이메일 확인 코드 입력 (세션 시작 전까지 가능, 같은 날 다른 세션은 영향 없음)",
+    practiceNotes: [
+      "전산 실습실로 개인 노트북은 미지참해도 됩니다.",
+      "구글 계정을 확인하시고 사전 로그인 여부를 확인해 주세요.",
+      PAID_ACCOUNT_NOTICE,
+    ],
+    onlineNote: "온라인(3차) 세션의 Zoom 링크는 D-1에 이메일로 발송되며, 카메라·마이크 사용을 권장합니다.",
+    count: (n: number) => `${n}건`,
+    waitingNote: "대기 상태인 세션은 결원 발생 시 순차적으로 안내드립니다.",
+    acceptedNote: "세션별 정원(대면 25명, 온라인 제한 없음) 내 선착순으로 접수되었습니다.",
+    changed: "변경",
+    zoomTitle: "Zoom 접속 링크",
+    zoomLabel: (round: string) => `${round} Zoom 접속 링크`,
+    zoomPending: "별도 안내 예정",
+    prelearningTitle: "사전학습",
+    prelearningLabel: (round: string) => `${round} 사전학습 동영상`,
+    attendGuide: (guide: string) =>
+      `참석이 어려우신 경우 ${guide}로 취소해 주시기 바랍니다. 취소하신 자리는 대기자에게 안내됩니다.`,
+    paidAccount:
+      "실습에 사용할 Claude(또는 ChatGPT) 유료계정이 지원됩니다. 계정 정보와 로그인 방법은 워크숍 시작 시 안내드리며, 개인 유료계정이 있으시면 해당 계정으로 사전 로그인해 오셔도 됩니다.",
+    googleOnline: "실습에 사용할 구글 계정(아이디·비밀번호)으로 미리 로그인이 되는지 확인해 주세요.",
+    googleOnsite:
+      "전산 실습실 PC에서 사용할 구글 계정(아이디·비밀번호)을 미리 확인하시고, 2단계 인증용 휴대폰을 지참해 주세요.",
+    arriveOnline: (time: string) => `${time}부터 Zoom 입장 가능(시작 10분 전)`,
+    arriveOnsite: (time: string) => `${time}까지 입실(시작 10분 전)`,
+    bringOnline: "PC(카메라·마이크), 안정적인 인터넷 환경, 구글 계정",
+    bringOnsite: "개인 노트북 미지참 가능(실습실 PC 제공), 구글 계정 정보, 2단계 인증용 휴대폰",
+    contact: `경상국립대학교 AI융합원 ${CONTACT_PHONE} / ${CONTACT_EMAIL}`,
+  },
+  en: {
+    online: "Online (Zoom)",
+    map: "map",
+    th: { round: "Session", topic: "Topic", when: "Date & time", place: "Venue", status: "Status", before: "Before", after: "After" },
+    cancelGuide:
+      "Portal [My Applications] → enter your name and phone number → [Cancel] on the session → enter the code emailed to you (available until the session starts; other sessions on the same day are not affected)",
+    practiceNotes: [
+      "Sessions are held in a computer lab, so you do not need to bring a laptop.",
+      "Please check your Google account and make sure you can sign in beforehand.",
+      "Paid Claude (or ChatGPT) accounts are provided (details will be sent one day before).",
+    ],
+    onlineNote:
+      "The Zoom link for the online session (Session 3) is emailed one day before. Using a camera and microphone is recommended.",
+    count: (n: number) => `${n} session${n === 1 ? "" : "s"}`,
+    waitingNote: "For waitlisted sessions, we will contact you in order if a seat opens.",
+    acceptedNote:
+      "Your application was accepted on a first-come, first-served basis within each session's capacity (25 in person; no limit online).",
+    changed: "changed",
+    zoomTitle: "Zoom link",
+    zoomLabel: (round: string) => `${round} Zoom link`,
+    zoomPending: "to be announced separately",
+    prelearningTitle: "Pre-learning",
+    prelearningLabel: (round: string) => `${round} pre-learning video`,
+    attendGuide: (guide: string) =>
+      `If you cannot attend, please cancel via: ${guide}. Your seat will be offered to people on the waiting list.`,
+    paidAccount:
+      "A paid Claude (or ChatGPT) account is provided for the hands-on practice. Account details and sign-in instructions are given at the start of the workshop. If you have your own paid account, you may sign in with it beforehand.",
+    googleOnline: "Please make sure in advance that you can sign in to the Google account (ID and password) you will use.",
+    googleOnsite:
+      "Please check in advance the Google account (ID and password) you will use on the lab PC, and bring your phone for two-step verification.",
+    arriveOnline: (time: string) => `You can join Zoom from ${time} (10 minutes before the start)`,
+    arriveOnsite: (time: string) => `Please arrive by ${time} (10 minutes before the start)`,
+    bringOnline: "A PC (camera and microphone), a stable internet connection, and your Google account",
+    bringOnsite:
+      "No laptop needed (lab PCs are provided); your Google account details and your phone for two-step verification",
+    contact: `AI Convergence Institute, Gyeongsang National University ${CONTACT_PHONE} / ${CONTACT_EMAIL}`,
+  },
+} as const;
 
 function sortSessions(sessions: MailSession[]): MailSession[] {
   return [...sessions].sort((a, b) => a.startAt.localeCompare(b.startAt) || a.round - b.round);
 }
 
 /** 장소 — 대면은 네이버 지도 하이퍼링크(텍스트 메일은 URL 병기), 온라인은 "온라인(Zoom)" (PRD §5.6) */
-export function locationVars(session: Pick<MailSession, "location" | "locationUrl" | "isOnline">) {
+export function locationVars(
+  session: Pick<MailSession, "location" | "locationUrl" | "isOnline">,
+  locale: Locale = "ko"
+) {
+  const L = STRINGS[locale];
   if (session.isOnline || !session.locationUrl) {
-    return { text: session.isOnline ? "온라인(Zoom)" : session.location, html: escapeHtml(session.isOnline ? "온라인(Zoom)" : session.location) };
+    const text = session.isOnline ? L.online : session.location;
+    return { text, html: escapeHtml(text) };
   }
   return {
-    text: `${session.location} (지도: ${session.locationUrl})`,
+    text: `${session.location} (${L.map}: ${session.locationUrl})`,
     html: `<a href="${escapeHtml(session.locationUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(session.location)}</a>`,
   };
 }
@@ -65,23 +136,25 @@ export function locationVars(session: Pick<MailSession, "location" | "locationUr
 const TH = 'style="border:1px solid #cbd5e1;background:#f1f5f9;padding:6px 8px;text-align:left;font-size:13px"';
 const TD = 'style="border:1px solid #cbd5e1;padding:6px 8px;font-size:13px;vertical-align:top"';
 
-function sessionTable(sessions: MailSession[], withStatus: boolean) {
+function sessionTable(sessions: MailSession[], withStatus: boolean, locale: Locale) {
+  const L = STRINGS[locale];
+  const statusLabel = (status: string) => (getDict(locale).status as Record<string, string>)[status] ?? status;
   const rows = sortSessions(sessions);
   const html = `<table style="border-collapse:collapse;width:100%;margin:12px 0">
-<thead><tr><th ${TH}>차수</th><th ${TH}>주제</th><th ${TH}>일시</th><th ${TH}>장소</th>${withStatus ? `<th ${TH}>상태</th>` : ""}</tr></thead>
+<thead><tr><th ${TH}>${L.th.round}</th><th ${TH}>${L.th.topic}</th><th ${TH}>${L.th.when}</th><th ${TH}>${L.th.place}</th>${withStatus ? `<th ${TH}>${L.th.status}</th>` : ""}</tr></thead>
 <tbody>${rows
     .map(
       (s) =>
         `<tr><td ${TD}>${escapeHtml(s.roundLabel)}</td><td ${TD}>${escapeHtml(s.topic)}</td><td ${TD}>${escapeHtml(
-          formatSessionDateTime(s.startAt, s.endAt)
-        )}</td><td ${TD}>${locationVars(s).html}</td>${withStatus ? `<td ${TD}>${escapeHtml(s.status)}</td>` : ""}</tr>`
+          formatSessionDateTime(s.startAt, s.endAt, locale)
+        )}</td><td ${TD}>${locationVars(s, locale).html}</td>${withStatus ? `<td ${TD}>${escapeHtml(statusLabel(s.status))}</td>` : ""}</tr>`
     )
     .join("")}</tbody></table>`;
   const text = rows
     .map(
       (s) =>
-        `- ${s.roundLabel} | ${s.topic} | ${formatSessionDateTime(s.startAt, s.endAt)} | ${locationVars(s).text}${
-          withStatus ? ` | ${s.status}` : ""
+        `- ${s.roundLabel} | ${s.topic} | ${formatSessionDateTime(s.startAt, s.endAt, locale)} | ${locationVars(s, locale).text}${
+          withStatus ? ` | ${statusLabel(s.status)}` : ""
         }`
     )
     .join("\n");
@@ -105,52 +178,55 @@ function uniqueNotes(sessions: MailSession[]): string {
   return Array.from(lines).join("\n");
 }
 
-function zoomVars(sessions: MailSession[]) {
+function zoomVars(sessions: MailSession[], locale: Locale) {
+  const L = STRINGS[locale];
   const online = sessions.filter((s) => s.isOnline);
   if (online.length === 0) return { html: "", text: "" };
   const items = online.map((s) => ({
-    label: `${s.roundLabel} Zoom 접속 링크`,
+    label: L.zoomLabel(s.roundLabel),
     link: s.zoomLink,
   }));
   return {
-    html: `<h3>Zoom 접속 링크</h3>${items
+    html: `<h3>${L.zoomTitle}</h3>${items
       .map((i) =>
         i.link
           ? `<p>${escapeHtml(i.label)}: <a href="${escapeHtml(i.link)}" target="_blank" rel="noopener noreferrer">${escapeHtml(i.link)}</a></p>`
-          : `<p>${escapeHtml(i.label)}: 별도 안내 예정</p>`
+          : `<p>${escapeHtml(i.label)}: ${L.zoomPending}</p>`
       )
       .join("")}`,
-    text: `\n[Zoom 접속 링크]\n${items.map((i) => `${i.label}: ${i.link ?? "별도 안내 예정"}`).join("\n")}\n`,
+    text: `\n[${L.zoomTitle}]\n${items.map((i) => `${i.label}: ${i.link ?? L.zoomPending}`).join("\n")}\n`,
   };
 }
 
-function sharedDayVars(sessions: MailSession[]) {
+function sharedDayVars(sessions: MailSession[], locale: Locale) {
   const first = sortSessions(sessions)[0];
-  const location = locationVars(first);
+  const location = locationVars(first, locale);
   return { first, location };
 }
 
-export function buildM1Vars(recipient: MailRecipient, sessions: MailSession[]): RenderVars {
-  const table = sessionTable(sessions, true);
+export function buildM1Vars(recipient: MailRecipient, sessions: MailSession[], locale: Locale = "ko"): RenderVars {
+  const L = STRINGS[locale];
+  const table = sessionTable(sessions, true, locale);
   const hasWaiting = sessions.some((s) => s.status === "대기");
   const hasOnline = sessions.some((s) => s.isOnline);
-  const notes = [...PRACTICE_NOTES, ...(hasOnline ? [ONLINE_NOTE] : [])].map((l) => `· ${l}`).join("\n");
+  const notes = [...L.practiceNotes, ...(hasOnline ? [L.onlineNote] : [])].map((l) => `· ${l}`).join("\n");
   return {
     text: {
       성명: recipient.name,
-      신청건수: String(sessions.length),
+      신청건수: locale === "en" ? L.count(sessions.length) : String(sessions.length),
       세션목록표: table.text,
-      정원대기안내: hasWaiting
-        ? "대기 상태인 세션은 결원 발생 시 순차적으로 안내드립니다."
-        : "세션별 정원(대면 25명, 온라인 제한 없음) 내 선착순으로 접수되었습니다.",
+      정원대기안내: hasWaiting ? L.waitingNote : L.acceptedNote,
       협조사항: notes,
-      취소방법: CANCEL_GUIDE,
+      취소방법: L.cancelGuide,
     },
     html: { 세션목록표: table.html },
   };
 }
 
-export function buildM2Vars(recipient: MailRecipient, changes: StatusChange[]): RenderVars {
+export function buildM2Vars(recipient: MailRecipient, changes: StatusChange[], locale: Locale = "ko"): RenderVars {
+  const L = STRINGS[locale];
+  const statusLabel = (status: string) => (getDict(locale).status as Record<string, string>)[status] ?? status;
+  const statusMessages = locale === "en" ? STATUS_MESSAGES_EN : STATUS_MESSAGES;
   const sorted = [...changes].sort((a, b) => a.session.startAt.localeCompare(b.session.startAt));
   const uniform = (pick: (c: StatusChange) => string) => {
     const values = Array.from(new Set(sorted.map(pick)));
@@ -158,19 +234,19 @@ export function buildM2Vars(recipient: MailRecipient, changes: StatusChange[]): 
   };
   const toStatuses = Array.from(new Set(sorted.map((c) => c.to)));
   const html = `<table style="border-collapse:collapse;width:100%;margin:12px 0">
-<thead><tr><th ${TH}>차수</th><th ${TH}>주제</th><th ${TH}>일시</th><th ${TH}>변경 전</th><th ${TH}>변경 후</th></tr></thead>
+<thead><tr><th ${TH}>${L.th.round}</th><th ${TH}>${L.th.topic}</th><th ${TH}>${L.th.when}</th><th ${TH}>${L.th.before}</th><th ${TH}>${L.th.after}</th></tr></thead>
 <tbody>${sorted
     .map(
       (c) =>
         `<tr><td ${TD}>${escapeHtml(c.session.roundLabel)}</td><td ${TD}>${escapeHtml(c.session.topic)}</td><td ${TD}>${escapeHtml(
-          formatSessionDateTime(c.session.startAt, c.session.endAt)
-        )}</td><td ${TD}>${escapeHtml(c.from)}</td><td ${TD}><strong>${escapeHtml(c.to)}</strong></td></tr>`
+          formatSessionDateTime(c.session.startAt, c.session.endAt, locale)
+        )}</td><td ${TD}>${escapeHtml(statusLabel(c.from))}</td><td ${TD}><strong>${escapeHtml(statusLabel(c.to))}</strong></td></tr>`
     )
     .join("")}</tbody></table>`;
   const text = sorted
     .map(
       (c) =>
-        `- ${c.session.roundLabel} | ${c.session.topic} | ${formatSessionDateTime(c.session.startAt, c.session.endAt)} | ${c.from} → ${c.to}`
+        `- ${c.session.roundLabel} | ${c.session.topic} | ${formatSessionDateTime(c.session.startAt, c.session.endAt, locale)} | ${statusLabel(c.from)} → ${statusLabel(c.to)}`
     )
     .join("\n");
   return {
@@ -178,10 +254,10 @@ export function buildM2Vars(recipient: MailRecipient, changes: StatusChange[]): 
       성명: recipient.name,
       차수: uniform((c) => c.session.roundLabel),
       주제: uniform((c) => c.session.topic),
-      일시: uniform((c) => formatSessionDateTime(c.session.startAt, c.session.endAt)),
-      변경전상태: uniform((c) => c.from),
-      변경후상태: toStatuses.length === 1 ? toStatuses[0] : "변경",
-      안내문: toStatuses.map((s) => STATUS_MESSAGES[s] ?? "").filter(Boolean).join("\n"),
+      일시: uniform((c) => formatSessionDateTime(c.session.startAt, c.session.endAt, locale)),
+      변경전상태: uniform((c) => statusLabel(c.from)),
+      변경후상태: toStatuses.length === 1 ? statusLabel(toStatuses[0]) : L.changed,
+      안내문: toStatuses.map((s) => statusMessages[s] ?? "").filter(Boolean).join("\n"),
       변경목록표: text,
     },
     html: { 변경목록표: html },
@@ -189,24 +265,26 @@ export function buildM2Vars(recipient: MailRecipient, changes: StatusChange[]): 
 }
 
 /** 사전학습 URL(세션 관리 입력값) — 미입력이면 빈 문자열(본문에 미작성) */
-function prelearningVars(sessions: MailSession[]) {
+function prelearningVars(sessions: MailSession[], locale: Locale) {
+  const L = STRINGS[locale];
   const prelearning = sortSessions(sessions).filter((s) => s.prelearningUrl);
   if (prelearning.length === 0) return { text: "", html: "" };
   return {
-    text: `\n[사전학습]\n${prelearning.map((s) => `${s.roundLabel} 사전학습 동영상: ${s.prelearningUrl}`).join("\n")}\n`,
-    html: `<h3>사전학습</h3>${prelearning
+    text: `\n[${L.prelearningTitle}]\n${prelearning.map((s) => `${L.prelearningLabel(s.roundLabel)}: ${s.prelearningUrl}`).join("\n")}\n`,
+    html: `<h3>${L.prelearningTitle}</h3>${prelearning
       .map(
         (s) =>
-          `<p>${escapeHtml(s.roundLabel)} 사전학습 동영상: <a href="${escapeHtml(s.prelearningUrl!)}" target="_blank" rel="noopener noreferrer">${escapeHtml(s.prelearningUrl!)}</a></p>`
+          `<p>${escapeHtml(L.prelearningLabel(s.roundLabel))}: <a href="${escapeHtml(s.prelearningUrl!)}" target="_blank" rel="noopener noreferrer">${escapeHtml(s.prelearningUrl!)}</a></p>`
       )
       .join("")}`,
   };
 }
 
-export function buildM3Vars(recipient: MailRecipient, sessions: MailSession[]): RenderVars {
-  const { first, location } = sharedDayVars(sessions);
+export function buildM3Vars(recipient: MailRecipient, sessions: MailSession[], locale: Locale = "ko"): RenderVars {
+  const L = STRINGS[locale];
+  const { first, location } = sharedDayVars(sessions, locale);
   const list = sessionList(sessions);
-  const prelearning = prelearningVars(sessions);
+  const prelearning = prelearningVars(sessions, locale);
   return {
     text: {
       성명: recipient.name,
@@ -216,7 +294,7 @@ export function buildM3Vars(recipient: MailRecipient, sessions: MailSession[]): 
       강사: first.instructor,
       협조사항: uniqueNotes(sessions),
       사전학습URL: prelearning.text,
-      참석확인취소방법: `참석이 어려우신 경우 ${CANCEL_GUIDE}로 취소해 주시기 바랍니다. 취소하신 자리는 대기자에게 안내됩니다.`,
+      참석확인취소방법: L.attendGuide(L.cancelGuide),
     },
     html: {
       세션목록: list.html,
@@ -226,21 +304,19 @@ export function buildM3Vars(recipient: MailRecipient, sessions: MailSession[]): 
   };
 }
 
-export function buildM5Vars(recipient: MailRecipient, sessions: MailSession[]): RenderVars {
-  const { first, location } = sharedDayVars(sessions);
+export function buildM5Vars(recipient: MailRecipient, sessions: MailSession[], locale: Locale = "ko"): RenderVars {
+  const L = STRINGS[locale];
+  const { first, location } = sharedDayVars(sessions, locale);
   const list = sessionList(sessions);
-  const zoom = zoomVars(sessions);
-  const prelearning = prelearningVars(sessions);
+  const zoom = zoomVars(sessions, locale);
+  const prelearning = prelearningVars(sessions, locale);
   return {
     text: {
       성명: recipient.name,
       운영일: first.dayLabel,
       세션목록: list.text,
-      유료계정안내:
-        "실습에 사용할 Claude(또는 ChatGPT) 유료계정이 지원됩니다. 계정 정보와 로그인 방법은 워크숍 시작 시 안내드리며, 개인 유료계정이 있으시면 해당 계정으로 사전 로그인해 오셔도 됩니다.",
-      구글계정안내: first.isOnline
-        ? "실습에 사용할 구글 계정(아이디·비밀번호)으로 미리 로그인이 되는지 확인해 주세요."
-        : "전산 실습실 PC에서 사용할 구글 계정(아이디·비밀번호)을 미리 확인하시고, 2단계 인증용 휴대폰을 지참해 주세요.",
+      유료계정안내: L.paidAccount,
+      구글계정안내: first.isOnline ? L.googleOnline : L.googleOnsite,
       Zoom링크: zoom.text,
       사전학습URL: prelearning.text,
       장소: location.text,
@@ -249,11 +325,12 @@ export function buildM5Vars(recipient: MailRecipient, sessions: MailSession[]): 
   };
 }
 
-export function buildM4Vars(recipient: MailRecipient, sessions: MailSession[]): RenderVars {
-  const { first, location } = sharedDayVars(sessions);
+export function buildM4Vars(recipient: MailRecipient, sessions: MailSession[], locale: Locale = "ko"): RenderVars {
+  const L = STRINGS[locale];
+  const { first, location } = sharedDayVars(sessions, locale);
   const list = sessionList(sessions);
-  const zoom = zoomVars(sessions);
-  const prelearning = prelearningVars(sessions);
+  const zoom = zoomVars(sessions, locale);
+  const prelearning = prelearningVars(sessions, locale);
   const startAt = new Date(new Date(first.startAt).getTime() - 10 * 60 * 1000).toISOString();
   return {
     text: {
@@ -261,15 +338,11 @@ export function buildM4Vars(recipient: MailRecipient, sessions: MailSession[]): 
       운영일: first.dayLabel,
       세션목록: list.text,
       장소: location.text,
-      입실시간: first.isOnline
-        ? `${formatTime(startAt)}부터 Zoom 입장 가능(시작 10분 전)`
-        : `${formatTime(startAt)}까지 입실(시작 10분 전)`,
-      준비물: first.isOnline
-        ? "PC(카메라·마이크), 안정적인 인터넷 환경, 구글 계정"
-        : "개인 노트북 미지참 가능(실습실 PC 제공), 구글 계정 정보, 2단계 인증용 휴대폰",
+      입실시간: first.isOnline ? L.arriveOnline(formatTime(startAt)) : L.arriveOnsite(formatTime(startAt)),
+      준비물: first.isOnline ? L.bringOnline : L.bringOnsite,
       Zoom링크: zoom.text,
       사전학습URL: prelearning.text,
-      문의처: `경상국립대학교 AI융합원 ${CONTACT_PHONE} / ${CONTACT_EMAIL}`,
+      문의처: L.contact,
     },
     html: { 세션목록: list.html, Zoom링크: zoom.html, 사전학습URL: prelearning.html, 장소: location.html },
   };
@@ -279,22 +352,24 @@ export function buildVars(
   type: EmailType,
   recipient: MailRecipient,
   sessions: MailSession[],
-  changes?: StatusChange[]
+  changes?: StatusChange[],
+  locale: Locale = "ko"
 ): RenderVars {
   switch (type) {
     case "M1":
-      return buildM1Vars(recipient, sessions);
+      return buildM1Vars(recipient, sessions, locale);
     case "M2":
       return buildM2Vars(
         recipient,
-        changes ?? sessions.map((s) => ({ session: s, from: s.status, to: s.status }))
+        changes ?? sessions.map((s) => ({ session: s, from: s.status, to: s.status })),
+        locale
       );
     case "M3":
-      return buildM3Vars(recipient, sessions);
+      return buildM3Vars(recipient, sessions, locale);
     case "M5":
-      return buildM5Vars(recipient, sessions);
+      return buildM5Vars(recipient, sessions, locale);
     case "M4":
-      return buildM4Vars(recipient, sessions);
+      return buildM4Vars(recipient, sessions, locale);
   }
 }
 

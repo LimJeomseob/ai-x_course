@@ -29,8 +29,11 @@ export async function adminFetch<T>(path: string, init: { method?: string; body?
   return data as T;
 }
 
-/** 공개 API(app/api/*) 호출 — 오류 응답의 error 메시지를 그대로 던진다. */
-export async function publicPost<T>(path: string, body: unknown): Promise<T> {
+/**
+ * 공개 API(app/api/*) 호출 — 오류 응답의 error 메시지를 그대로 던진다.
+ * 본문에 locale을 넣어 보내면 서버가 그 언어로 오류 문구를 돌려준다.
+ */
+export async function publicPost<T>(path: string, body: unknown, fallbackError = "요청 처리 중 오류가 발생했습니다."): Promise<T> {
   const res = await fetch(path, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -38,7 +41,7 @@ export async function publicPost<T>(path: string, body: unknown): Promise<T> {
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error((data as { error?: string }).error ?? "요청 처리 중 오류가 발생했습니다.");
+    throw new Error((data as { error?: string }).error ?? fallbackError);
   }
   return data as T;
 }

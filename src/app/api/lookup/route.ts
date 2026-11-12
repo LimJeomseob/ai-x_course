@@ -4,9 +4,12 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createServiceClient } from "@/lib/supabase/server";
-import { jsonError, normalizePhone, PHONE_REGEX } from "@/lib/api";
+import { jsonError, normalizePhone, PHONE_REGEX, readJsonBody } from "@/lib/api";
 import { CERTIFICATES_BUCKET } from "@/lib/db-tables";
-import type { ApplicationStatus, LookupResultItem } from "@/lib/types";
+import { getDict } from "@/lib/i18n/dict";
+import { allowPublicRequest } from "@/lib/rateLimit";
+import { localizeDay, localizeSession } from "@/lib/workshops";
+import type { ApplicationStatus, LookupResultItem, WorkshopDay } from "@/lib/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,6 +19,8 @@ const lookupSchema = z.object({
   phone: z.string().trim().regex(PHONE_REGEX),
 });
 
+type DayRow = Pick<WorkshopDay, "day_code" | "day_label" | "location" | "location_url" | "is_online" | "day_label_en" | "location_en">;
+
 interface Row {
   id: string;
   phone: string;
@@ -24,30 +29,47 @@ interface Row {
     round: number;
     round_label: string;
     topic: string;
+    topic_en: string | null;
     start_at: string;
     end_at: string;
-    day: { day_code: string; day_label: string; location: string; location_url: string | null; is_online: boolean };
+    day: DayRow;
   } | null;
 }
 
 export async function POST(req: Request) {
-  const parsed = lookupSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return jsonError("성명과 연락처를 확인해 주세요.", 400);
+  const { body, locale } = await readJsonBody(req);
+  const t = getDict(locale).api;
+
+  const parsed = lookupSchema.safeParse(body);
+  if (!parsed.success) return jsonError(t.identityInvalid, 400);
 
   const { name, phone } = parsed.data;
   const digits = normalizePhone(phone);
   const db = createServiceClient();
 
+  // 성명+연락처 대입 시도를 막는다(IP 기준 + 같은 연락처 기준).
+  const allowed = await allowPublicRequest(
+    db,
+    req,
+    "lookup",
+    { limit: 120, windowSec: 600 },
+    { value: digits, rule: { limit: 20, windowSec: 600 } }
+  );
+  if (!allowed) return jsonError(t.tooMany, 429);
+
   const { data, error } = await db
     .from("applications")
     .select(
-      "id, phone, status, workshop:workshops(round, round_label, topic, start_at, end_at, day:workshop_days(day_code, day_label, location, location_url, is_online))"
+      "id, phone, status, workshop:workshops(round, round_label, topic, topic_en, start_at, end_at, day:workshop_days(day_code, day_label, location, location_url, is_online, day_label_en, location_en))"
     )
     .eq("name", name)
     .eq("phone_digits", digits)
     .returns<Row[]>();
 
-  if (error) return jsonError("조회 중 오류가 발생했습니다.", 500);
+  if (error) {
+    console.error("[lookup] 조회 실패:", error.message);
+    return jsonError(t.lookupFailed, 500);
+  }
   const rows = (data ?? []).filter((r) => r.workshop);
   if (rows.length === 0) return NextResponse.json({ results: [] });
 
@@ -67,7 +89,8 @@ export async function POST(req: Request) {
 
   const results: LookupResultItem[] = await Promise.all(
     rows.map(async (row) => {
-      const w = row.workshop!;
+      const w = localizeSession(row.workshop!, locale);
+      const day = localizeDay(row.workshop!.day, locale);
       const cert = certByApp.get(row.id);
       let certDownloadUrl: string | null = null;
       if (row.status === "이수" && cert?.pdf_path) {
@@ -81,11 +104,11 @@ export async function POST(req: Request) {
         topic: w.topic,
         startAt: w.start_at,
         endAt: w.end_at,
-        dayCode: w.day.day_code,
-        dayLabel: w.day.day_label,
-        location: w.day.location,
-        locationUrl: w.day.location_url,
-        isOnline: w.day.is_online,
+        dayCode: day.day_code,
+        dayLabel: day.day_label,
+        location: day.location,
+        locationUrl: day.location_url,
+        isOnline: day.is_online,
         status: row.status,
         certNo: cert?.cert_no ?? null,
         certDownloadUrl,

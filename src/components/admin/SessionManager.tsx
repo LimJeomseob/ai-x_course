@@ -12,6 +12,7 @@ import type { WorkshopAdminLinks } from "@/lib/types";
 
 interface Draft {
   notes: string;
+  notes_en: string;
   zoom_link: string;
   prelearning_url: string;
 }
@@ -22,6 +23,7 @@ export function SessionManager() {
   const [sessions, setSessions] = useState<WorkshopAdminLinks[]>([]);
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
   const [dayNotes, setDayNotes] = useState<Record<string, string>>({});
+  const [dayNotesEn, setDayNotesEn] = useState<Record<string, string>>({});
   const [flash, setFlash] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
 
@@ -29,8 +31,9 @@ export function SessionManager() {
     try {
       const { sessions: rows } = await adminFetch<{ sessions: WorkshopAdminLinks[] }>("/api/admin/sessions");
       setSessions(rows);
-      setDrafts(Object.fromEntries(rows.map((s) => [s.id, { notes: s.notes, zoom_link: s.zoom_link ?? "", prelearning_url: s.prelearning_url ?? "" }])));
+      setDrafts(Object.fromEntries(rows.map((s) => [s.id, { notes: s.notes, notes_en: s.notes_en ?? "", zoom_link: s.zoom_link ?? "", prelearning_url: s.prelearning_url ?? "" }])));
       setDayNotes(Object.fromEntries(rows.map((s) => [s.day.day_code, s.day.notes])));
+      setDayNotesEn(Object.fromEntries(rows.map((s) => [s.day.day_code, s.day.notes_en ?? ""])));
     } catch (e) {
       setFlash({ type: "error", text: e instanceof Error ? e.message : "세션 정보를 불러오지 못했습니다." });
     }
@@ -55,7 +58,9 @@ export function SessionManager() {
 
   async function saveDayNotes(dayCode: string) {
     setSavingId(dayCode);
-    const { error } = await supabase.from(TABLES.WORKSHOP_DAYS).update({ notes: dayNotes[dayCode] }).eq("day_code", dayCode);
+    const { error } = await supabase.from(TABLES.WORKSHOP_DAYS)
+      .update({ notes: dayNotes[dayCode], notes_en: dayNotesEn[dayCode]?.trim() ? dayNotesEn[dayCode] : null })
+      .eq("day_code", dayCode);
     setSavingId(null);
     setFlash(error ? { type: "error", text: error.message } : { type: "success", text: `Day ${dayCode} 공통 협조사항을 저장했습니다.` });
   }
@@ -69,6 +74,7 @@ export function SessionManager() {
         <p className="mt-1 text-sm text-slate-500">
           Zoom 링크(3차)는 D-1 준비 안내(M5)·당일 안내(M4) 메일로만, 사전학습 URL(5차)은 D-3 운영 안내(M3) 메일로만 발송되며 포털에는 노출되지 않습니다.
           Zoom 링크가 비어 있으면 M5 발송이 보류되고 관리자에게 알림 메일이 갑니다.
+          영문 협조사항은 영문 화면(/en)과 영문 메일에 쓰이며, 비워 두면 한국어 협조사항이 그대로 표시됩니다.
         </p>
       </div>
       {flash && (
@@ -85,6 +91,10 @@ export function SessionManager() {
               운영일 공통 협조사항(소개 카드·메일 공통)
               <textarea rows={2} className={inputBaseClass} value={dayNotes[day.day_code] ?? ""} onChange={(e) => setDayNotes((d) => ({ ...d, [day.day_code]: e.target.value }))} />
             </label>
+            <label className="mt-2 flex flex-col gap-1 text-xs font-semibold text-slate-600">
+              운영일 공통 협조사항(영문)
+              <textarea rows={2} lang="en" className={inputBaseClass} value={dayNotesEn[day.day_code] ?? ""} onChange={(e) => setDayNotesEn((d) => ({ ...d, [day.day_code]: e.target.value }))} />
+            </label>
             <Button size="sm" variant="outline" className="mt-2" disabled={savingId === day.day_code} onClick={() => saveDayNotes(day.day_code)}>공통 협조사항 저장</Button>
           </div>
           <ul className="divide-y divide-slate-100">
@@ -99,10 +109,14 @@ export function SessionManager() {
                     <p className="text-sm text-slate-600">{s.topic}</p>
                     <p className="text-xs text-slate-500">{formatDate(s.start_at)} {formatTime(s.start_at)}</p>
                   </div>
-                  <div className="grid gap-3 md:grid-cols-3">
+                  <div className="grid gap-3 md:grid-cols-2">
                     <label className="flex flex-col gap-1 text-xs font-semibold text-slate-600">
                       세션 추가 협조사항
                       <textarea rows={2} className={inputBaseClass} value={draft.notes} onChange={(e) => update("notes", e.target.value)} />
+                    </label>
+                    <label className="flex flex-col gap-1 text-xs font-semibold text-slate-600">
+                      세션 추가 협조사항(영문)
+                      <textarea rows={2} lang="en" className={inputBaseClass} value={draft.notes_en} onChange={(e) => update("notes_en", e.target.value)} />
                     </label>
                     <label className="flex flex-col gap-1 text-xs font-semibold text-slate-600">
                       Zoom 링크{s.day.is_online ? " (필수)" : ""}
@@ -112,7 +126,7 @@ export function SessionManager() {
                       사전학습 URL
                       <input type="url" placeholder="https://" className={inputBaseClass} value={draft.prelearning_url} onChange={(e) => update("prelearning_url", e.target.value)} />
                     </label>
-                    <Button size="sm" className="justify-self-start md:col-span-3" disabled={savingId === s.id} onClick={() => saveSession(s.id)}>
+                    <Button size="sm" className="justify-self-start md:col-span-2" disabled={savingId === s.id} onClick={() => saveSession(s.id)}>
                       {savingId === s.id ? "저장 중..." : `${s.round_label} 저장`}
                     </Button>
                   </div>

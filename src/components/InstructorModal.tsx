@@ -3,6 +3,7 @@
 import { useId } from "react";
 import { Modal } from "@/components/ui/Modal";
 import type { InstructorProfile } from "@/lib/constants";
+import { useDict } from "@/lib/i18n/LocaleProvider";
 
 interface InstructorModalProps {
   instructor: InstructorProfile | null;
@@ -31,6 +32,8 @@ function ProfileList({ title, items }: { title: string; items?: string[] }) {
 /** 강사 프로필 모달(PRD §5.1). 포커스 트랩·ESC·배경 클릭 닫힘은 ui/Modal이 담당 */
 export function InstructorModal({ instructor, onClose }: InstructorModalProps) {
   const titleId = useId();
+  const dict = useDict();
+  const t = dict.instructor;
 
   return (
     <Modal open={!!instructor} onClose={onClose} titleId={titleId}>
@@ -46,7 +49,9 @@ export function InstructorModal({ instructor, onClose }: InstructorModalProps) {
               </span>
               <div>
                 <h2 id={titleId} className="text-xl font-bold text-slate-900">
-                  {instructor.name} {instructor.title}
+                  {instructor.name}
+                  {/^[A-Za-z]/.test(instructor.title) ? ", " : " "}
+                  {instructor.title}
                 </h2>
                 {instructor.tagline && <p className="mt-0.5 text-sm text-accent">{instructor.tagline}</p>}
               </div>
@@ -54,7 +59,7 @@ export function InstructorModal({ instructor, onClose }: InstructorModalProps) {
             <button
               type="button"
               onClick={onClose}
-              aria-label="닫기"
+              aria-label={dict.common.close}
               className="shrink-0 rounded-full p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
             >
               <span aria-hidden="true" className="text-xl leading-none">
@@ -65,24 +70,24 @@ export function InstructorModal({ instructor, onClose }: InstructorModalProps) {
 
           <dl className="flex flex-col gap-4 text-sm">
             <div>
-              <dt className="font-semibold text-slate-800">소속</dt>
+              <dt className="font-semibold text-slate-800">{t.affiliation}</dt>
               <dd className="mt-0.5 text-slate-600">{instructor.affiliation}</dd>
             </div>
             {instructor.summary && (
               <div>
-                <dt className="font-semibold text-slate-800">프로필</dt>
+                <dt className="font-semibold text-slate-800">{t.profile}</dt>
                 <dd className="mt-0.5 leading-relaxed text-slate-600">{instructor.summary}</dd>
               </div>
             )}
-            <ProfileList title="전문 분야" items={instructor.specialties} />
-            <ProfileList title="학력·자격" items={instructor.education} />
-            <ProfileList title="주요 경력" items={instructor.career} />
-            <ProfileList title="강의 이력" items={instructor.lectures} />
-            <ProfileList title="연구 과제" items={instructor.research} />
-            <ProfileList title="수상 이력" items={instructor.awards} />
-            <ProfileList title="저서·발간물" items={instructor.publications} />
+            <ProfileList title={t.specialties} items={instructor.specialties} />
+            <ProfileList title={t.education} items={instructor.education} />
+            <ProfileList title={t.career} items={instructor.career} />
+            <ProfileList title={t.lectures} items={instructor.lectures} />
+            <ProfileList title={t.research} items={instructor.research} />
+            <ProfileList title={t.awards} items={instructor.awards} />
+            <ProfileList title={t.publications} items={instructor.publications} />
             <div className="rounded-lg bg-brand/5 p-3">
-              <dt className="font-semibold text-brand">담당 세션</dt>
+              <dt className="font-semibold text-brand">{t.assignment}</dt>
               <dd className="mt-0.5 text-slate-700">{instructor.assignment}</dd>
             </div>
           </dl>

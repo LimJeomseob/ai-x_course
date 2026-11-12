@@ -2,7 +2,8 @@ import { PROGRAM_NAME } from "@/lib/constants";
 import { formatCertIssueDate, formatCertPeriod } from "@/lib/format";
 import type { CertificateTemplate, CertificateTemplateText } from "@/lib/types";
 
-// 수료증 PDF는 발급하는 사람의 브라우저에서 생성한다(참조 시스템 승계 — 서버는 채번·서식·업로드 토큰만 담당).
+// 수료증 PDF 생성 공용 모듈. 공개 발급은 서버(/api/issue-certificate)가 디스크의 폰트로 생성하고,
+// 관리자 발급은 관리자 브라우저에서 생성한다(폰트는 /fonts에서 내려받음).
 // 폰트는 반드시 public/fonts/의 가공본(scripts/process_cert_fonts.py 산출물)을 쓴다.
 // @pdf-lib/fontkit의 TTFSubset은 홀수 길이 글리프 뒤에 패딩을 넣지 않아 short-loca 서브셋이
 // 1바이트씩 밀리며 글자가 깨진다 — 가공본은 모든 글리프를 짝수 길이로 패딩해 이 버그를 회피한다.

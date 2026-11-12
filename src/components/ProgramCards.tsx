@@ -5,8 +5,11 @@ import Link from "next/link";
 import { InstructorModal } from "@/components/InstructorModal";
 import { LocationLink } from "@/components/LocationLink";
 import { LevelBadge, PhaseBadge } from "@/components/ui/Badges";
-import { findInstructor, type InstructorProfile } from "@/lib/constants";
+import type { InstructorProfile } from "@/lib/constants";
 import { formatTimeRange } from "@/lib/format";
+import { localePath } from "@/lib/i18n/config";
+import { getContent } from "@/lib/i18n/content";
+import { useDict, useLocale } from "@/lib/i18n/LocaleProvider";
 import {
   deriveSessionStatus,
   fetchProgramData,
@@ -20,6 +23,10 @@ export function circled(no: number): string {
 
 /** 소개 탭 운영일 카드 4개(PRD §5.1) — 신청·정원은 세션 단위로 표시 */
 export function ProgramCards() {
+  const locale = useLocale();
+  const dict = useDict();
+  const t = dict.cards;
+  const content = getContent(locale);
   const [data, setData] = useState<ProgramData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [instructor, setInstructor] = useState<InstructorProfile | null>(null);
@@ -27,12 +34,12 @@ export function ProgramCards() {
   const closeInstructor = useCallback(() => setInstructor(null), []);
 
   useEffect(() => {
-    fetchProgramData()
+    fetchProgramData(locale)
       .then(setData)
       .catch((e: Error) => setError(e.message));
     const timer = setInterval(() => setNow(Date.now()), 60_000);
     return () => clearInterval(timer);
-  }, []);
+  }, [locale]);
 
   if (error) {
     return (
@@ -44,7 +51,7 @@ export function ProgramCards() {
   if (!data) {
     return (
       <p role="status" className="text-sm text-slate-500">
-        세션 정보를 불러오는 중...
+        {dict.common.sessionsLoading}
       </p>
     );
   }
@@ -53,7 +60,8 @@ export function ProgramCards() {
     <>
       <div className="grid gap-6">
         {data.days.map((day) => {
-          const profile = findInstructor(day.instructor);
+          const profile = content.findInstructor(day.instructor_ko ?? day.instructor);
+          const instructorText = instructorDisplay(day, locale);
           return (
             <article
               key={day.id}
@@ -67,35 +75,37 @@ export function ProgramCards() {
                     {day.day_label}
                   </h3>
                   <LevelBadge level={day.level} />
-                  <span className="text-sm text-slate-600">대상: {day.target}</span>
+                  <span className="text-sm text-slate-600">
+                    {t.target}: {day.target}
+                  </span>
                 </div>
                 <dl className="mt-3 grid gap-1.5 text-sm text-slate-700 sm:grid-cols-2">
                   <div className="flex gap-2">
-                    <dt className="shrink-0 font-semibold">📍 장소</dt>
+                    <dt className="shrink-0 font-semibold">📍 {dict.common.place}</dt>
                     <dd>
                       <LocationLink location={day.location} url={day.location_url} isOnline={day.is_online} />
                     </dd>
                   </div>
                   <div className="flex gap-2">
-                    <dt className="shrink-0 font-semibold">강사</dt>
+                    <dt className="shrink-0 font-semibold">{t.instructor}</dt>
                     <dd>
                       {profile ? (
                         <button
                           type="button"
                           onClick={() => setInstructor(profile)}
                           className="font-medium text-accent underline underline-offset-2 hover:text-brand"
-                          aria-label={`${instructorDisplay(day)} 프로필 보기`}
+                          aria-label={t.viewProfile(instructorText)}
                         >
-                          {instructorDisplay(day)}
+                          {instructorText}
                         </button>
                       ) : (
-                        instructorDisplay(day)
+                        instructorText
                       )}
                     </dd>
                   </div>
                   {day.notes && (
                     <div className="flex gap-2 sm:col-span-2">
-                      <dt className="shrink-0 font-semibold">협조사항</dt>
+                      <dt className="shrink-0 font-semibold">{t.notes}</dt>
                       <dd className="text-slate-600">{day.notes}</dd>
                     </div>
                   )}
@@ -132,12 +142,10 @@ export function ProgramCards() {
                         <div className="flex shrink-0 flex-col items-end gap-2 text-right">
                           <PhaseBadge phase={status.phase} />
                           <p className="text-xs text-slate-500">
-                            {status.unlimited
-                              ? "정원 제한 없음"
-                              : `정원 ${session.capacity}명${status.remaining !== null ? ` · 잔여 ${status.remaining}명` : ""}`}
+                            {status.unlimited ? t.unlimited : t.capacity(session.capacity, status.remaining)}
                           </p>
                           <Link
-                            href={`/apply?round=${session.round}`}
+                            href={`${localePath(locale, "/apply")}?round=${session.round}`}
                             aria-disabled={!status.canApply}
                             className={
                               status.canApply
@@ -145,7 +153,7 @@ export function ProgramCards() {
                                 : "pointer-events-none rounded-lg bg-slate-200 px-3 py-1.5 text-sm font-bold text-slate-500"
                             }
                           >
-                            이 세션 신청
+                            {t.applyThis}
                           </Link>
                         </div>
                       </div>
@@ -157,13 +165,13 @@ export function ProgramCards() {
               {day.sessions.length > 1 && (
                 <footer className="flex flex-col gap-3 border-t border-slate-100 bg-slate-50 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
                   <p className="text-sm text-slate-600">
-                    {day.link_notice ?? "같은 날 세션은 기초→심화로 연계 구성되어 있어 함께 수강을 권장합니다"}
+                    {day.link_notice ?? t.defaultLinkNotice}
                   </p>
                   <Link
-                    href={`/apply?day=${day.day_code}`}
+                    href={`${localePath(locale, "/apply")}?day=${day.day_code}`}
                     className="inline-flex shrink-0 items-center justify-center rounded-lg border-2 border-brand bg-white px-4 py-2 text-sm font-bold text-brand hover:bg-brand/5"
                   >
-                    당일 세션 모두 신청
+                    {t.applyAllDay}
                   </Link>
                 </footer>
               )}

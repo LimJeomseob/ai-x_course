@@ -2,7 +2,8 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { TABLES } from "@/lib/db-tables";
 import { addDaysToDateKey, kstDateKey } from "@/lib/format";
-import { combinedNotes, instructorDisplay } from "@/lib/workshops";
+import { combinedNotes, instructorDisplay, localizeDay, localizeSession } from "@/lib/workshops";
+import { toLocale, type Locale } from "@/lib/i18n/config";
 import type { EmailLogType, EmailSettings, EmailTemplateRow, EmailType } from "@/lib/types";
 import { buildVars, sampleSessions, SAMPLE_RECIPIENT, type MailSession, type SessionLinks, type StatusChange } from "./content";
 import { sendMailWithRetry } from "./mailer";
@@ -14,6 +15,7 @@ import { renderEmail, resolveTemplate } from "./templates";
  *  - 재시도: 즉시 1회(mailer) + 다음 Cron 주기, 실패 3회 누적 건은 Cron 대상에서 제외(관리자 수동 재발송).
  *  - 통합: 같은 수신자(이메일) 복수 세션은 1통(M1: 전체, M3·M5·M4: 운영일 단위).
  *  - 성공 시 notice1~3_confirmed 자동 갱신(M1→1차, M3→2차, M4→3차).
+ *  - 언어: 신청 화면 언어(applications.locale)로 발송한다. 한 통에 여러 신청이 묶이면 가장 최근 신청의 언어.
  */
 
 export const MAX_FAILURES = 3;
@@ -25,7 +27,7 @@ const NOTICE_FIELD_BY_TYPE: Partial<Record<EmailType, string>> = {
 };
 
 const APP_SELECT =
-  "id, name, email, status, created_at, workshop:workshops(id, round, round_label, topic, start_at, end_at, notes, zoom_link, prelearning_url, day:workshop_days(day_code, day_label, location, location_url, is_online, instructor, instructor_title, instructor_org, notes))";
+  "id, name, email, status, locale, created_at, workshop:workshops(id, round, round_label, topic, topic_en, start_at, end_at, notes, notes_en, zoom_link, prelearning_url, day:workshop_days(day_code, day_label, day_label_en, location, location_en, location_url, is_online, instructor, instructor_en, instructor_title, instructor_title_en, instructor_org, instructor_org_en, notes, notes_en))";
 
 // 세션 시작일 조건을 걸기 위해 workshop 임베드를 inner join으로 지정한다.
 const APP_SELECT_INNER = APP_SELECT.replace("workshop:workshops(", "workshop:workshops!inner(");
@@ -35,27 +37,36 @@ interface AppRow {
   name: string;
   email: string;
   status: string;
+  locale: string | null;
   created_at: string;
   workshop: {
     id: string;
     round: number;
     round_label: string;
     topic: string;
+    topic_en: string | null;
     start_at: string;
     end_at: string;
     notes: string;
+    notes_en: string | null;
     zoom_link: string | null;
     prelearning_url: string | null;
     day: {
       day_code: string;
       day_label: string;
+      day_label_en: string | null;
       location: string;
+      location_en: string | null;
       location_url: string | null;
       is_online: boolean;
       instructor: string;
+      instructor_en: string | null;
       instructor_title: string;
+      instructor_title_en: string | null;
       instructor_org: string;
+      instructor_org_en: string | null;
       notes: string;
+      notes_en: string | null;
     };
   };
 }
@@ -64,7 +75,20 @@ interface Recipient {
   appId: string;
   name: string;
   email: string;
+  locale: Locale;
+  createdAt: string;
   session: MailSession;
+  /** 영문 메일용 세션 표기(영문 값이 없으면 한국어 값으로 대체) */
+  sessionEn: MailSession;
+}
+
+/** 한 통으로 묶이는 신청들의 발송 언어 — 가장 최근 신청의 언어 */
+function groupLocale(recipients: Recipient[]): Locale {
+  return [...recipients].sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]?.locale ?? "ko";
+}
+
+function sessionsFor(recipients: Recipient[], locale: Locale): MailSession[] {
+  return recipients.map((r) => (locale === "en" ? r.sessionEn : r.session));
 }
 
 export interface SendOutcome {
@@ -96,31 +120,38 @@ export function portalUrl(): string {
   return vercel ? `https://${vercel}` : "";
 }
 
+function toMailSession(row: AppRow, locale: Locale): MailSession {
+  const w = localizeSession(row.workshop, locale);
+  const d = localizeDay(row.workshop.day, locale);
+  return {
+    applicationId: row.id,
+    round: w.round,
+    roundLabel: w.round_label,
+    topic: w.topic,
+    startAt: w.start_at,
+    endAt: w.end_at,
+    dayCode: d.day_code,
+    dayLabel: d.day_label,
+    location: d.location,
+    locationUrl: d.location_url,
+    isOnline: d.is_online,
+    instructor: instructorDisplay(d, locale),
+    notes: combinedNotes(d.notes, w.notes),
+    status: row.status,
+    zoomLink: w.zoom_link,
+    prelearningUrl: w.prelearning_url,
+  };
+}
+
 function toRecipient(row: AppRow): Recipient {
-  const w = row.workshop;
-  const d = w.day;
   return {
     appId: row.id,
     name: row.name,
     email: row.email.trim().toLowerCase(),
-    session: {
-      applicationId: row.id,
-      round: w.round,
-      roundLabel: w.round_label,
-      topic: w.topic,
-      startAt: w.start_at,
-      endAt: w.end_at,
-      dayCode: d.day_code,
-      dayLabel: d.day_label,
-      location: d.location,
-      locationUrl: d.location_url,
-      isOnline: d.is_online,
-      instructor: instructorDisplay(d),
-      notes: combinedNotes(d.notes, w.notes),
-      status: row.status,
-      zoomLink: w.zoom_link,
-      prelearningUrl: w.prelearning_url,
-    },
+    locale: toLocale(row.locale),
+    createdAt: row.created_at,
+    session: toMailSession(row, "ko"),
+    sessionEn: toMailSession(row, "en"),
   };
 }
 
@@ -205,13 +236,21 @@ interface DeliverInput {
   changes?: StatusChange[];
   appIds: string[];
   priorFailures?: number;
+  locale?: Locale;
 }
 
 async function deliver(db: SupabaseClient, input: DeliverInput): Promise<boolean> {
   const row = await loadTemplateRow(db, input.templateType);
-  const template = resolveTemplate(input.templateType, row);
-  const vars = buildVars(input.templateType, { name: input.name, email: input.to }, input.sessions, input.changes);
-  const mail = renderEmail(template, vars, portalUrl());
+  const locale = input.locale ?? "ko";
+  const template = resolveTemplate(input.templateType, row, locale);
+  const vars = buildVars(
+    input.templateType,
+    { name: input.name, email: input.to },
+    input.sessions,
+    input.changes,
+    locale
+  );
+  const mail = renderEmail(template, vars, portalUrl(), locale);
   const batchKey = `${input.type}-${kstDateKey(new Date())}-${crypto.randomUUID()}`;
 
   let status: "성공" | "실패" = "성공";
@@ -263,12 +302,14 @@ async function deliverGroups(
       break;
     }
     const sorted = [...recipients].sort((a, b) => a.session.startAt.localeCompare(b.session.startAt));
+    const locale = groupLocale(sorted);
     const ok = await deliver(db, {
       type,
       templateType: type,
+      locale,
       to: sorted[0].email,
       name: sorted[sorted.length - 1].name,
-      sessions: sorted.map((r) => r.session),
+      sessions: sessionsFor(sorted, locale),
       appIds: sorted.map((r) => r.appId),
       priorFailures: Math.max(0, ...sorted.map((r) => failures?.get(r.appId)?.failures ?? 0)),
     });
@@ -434,25 +475,28 @@ export async function sendStatusChangeNotices(
   const byId = new Map(rows.map((r) => [r.id, toRecipient(r)]));
   const outcome = emptyOutcome();
 
-  const groups = new Map<string, { recipient: Recipient; change: StatusChange }[]>();
+  const groups = new Map<string, { recipient: Recipient; from: string; to: string }[]>();
   for (const c of changes) {
     const recipient = byId.get(c.applicationId);
     if (!recipient) {
       outcome.skipped += 1; // 이메일 미입력(관리자 대리등록) 등
       continue;
     }
-    const entry = { recipient, change: { session: recipient.session, from: c.from, to: c.to } };
+    const entry = { recipient, from: c.from, to: c.to };
     groups.set(recipient.email, [...(groups.get(recipient.email) ?? []), entry]);
   }
 
   for (const entries of groups.values()) {
+    const locale = groupLocale(entries.map((e) => e.recipient));
+    const pick = (r: Recipient) => (locale === "en" ? r.sessionEn : r.session);
     const ok = await deliver(db, {
       type: "M2",
       templateType: "M2",
+      locale,
       to: entries[0].recipient.email,
       name: entries[0].recipient.name,
-      sessions: entries.map((e) => e.recipient.session),
-      changes: entries.map((e) => e.change),
+      sessions: entries.map((e) => pick(e.recipient)),
+      changes: entries.map((e) => ({ session: pick(e.recipient), from: e.from, to: e.to })),
       appIds: entries.map((e) => e.recipient.appId),
     });
     if (ok) outcome.sent += 1;

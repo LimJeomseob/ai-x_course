@@ -403,7 +403,7 @@ workshop, axis_participant, college_group, awareness_path, q1~q7 int check 1~5, 
     - 브랜치 전략: `main` → Production, PR/기타 브랜치 → Preview 배포 자동 생성
     - Vercel 환경변수: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, (서버 전용) `SUPABASE_SERVICE_ROLE_KEY`
     - 도메인: Vercel 기본 `.vercel.app` → 운영 시 대학 서브도메인 연결(선택). Supabase Auth **Site URL·Redirect URLs를 Vercel 프로덕션/프리뷰 도메인(`https://<project>.[vercel.app/](http://vercel.app/)**`)으로 등록
-- Next.js 14(App Router) + Tailwind
+- Next.js 15(App Router) + Tailwind
 - Supabase(Postgres·Auth·RLS·Storage) — 신규 프로젝트
 - 서버 로직(본인확인·취소·공개 수료증 발급): Vercel 배포로 서버 런타임이 생기므로 **Next.js Route Handler(`app/api/*`, Node 런타임, service role 키 서버 보관)로 구현을 권장**. 참조 시스템의 Supabase Edge Function(`lookup`, `cancel-application`, `issue-certificate`) 코드를 Route Handler로 이관하거나 그대로 Edge Function으로 유지(둘 중 택일, 기본값: Route Handler)
 - 수료증 PDF: 브라우저 `pdf-lib` + `@pdf-lib/fontkit`, 서브셋 폰트 `NotoSansKR-*-Cert.ttf`(`scripts/process_cert_fonts.py` 재사용). Node 런타임에서는 fontkit의 Deno 호환 문제가 없으므로 서버 생성(Route Handler)으로 전환 가능 — Should

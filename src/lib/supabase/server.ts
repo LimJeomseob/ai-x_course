@@ -1,4 +1,5 @@
 import "server-only";
+import { timingSafeEqual } from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { supabaseUrl } from "./url";
 
@@ -60,5 +61,8 @@ export async function verifyAdminRequest(req: Request): Promise<AdminIdentity | 
 export function verifyCronRequest(req: Request): boolean {
   const secret = process.env.CRON_SECRET;
   if (!secret) return false;
-  return req.headers.get("authorization") === `Bearer ${secret}`;
+  // 응답 시간 차이로 비밀값을 추측하지 못하도록 상수 시간 비교를 쓴다.
+  const given = Buffer.from(req.headers.get("authorization") ?? "");
+  const expected = Buffer.from(`Bearer ${secret}`);
+  return given.length === expected.length && timingSafeEqual(given, expected);
 }
