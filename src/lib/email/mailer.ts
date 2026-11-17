@@ -49,6 +49,16 @@ export interface OutgoingMail {
   text: string;
 }
 
+/**
+ * 수신 주소는 신청자가 입력한 값이다. 주소 파서가 여러 수신자·주석·그룹으로 해석할 여지가 있는
+ * 문자(공백·쉼표·세미콜론·콜론·괄호·큰따옴표·꺾쇠·역슬래시·제어문자)가 있으면 발송하지 않는다.
+ */
+const SINGLE_ADDRESS = /^[^\s,;:()<>"\\@\x00-\x1f\x7f]+@[^\s,;:()<>"\\@\x00-\x1f\x7f]+\.[^\s,;:()<>"\\@\x00-\x1f\x7f]+$/;
+
+export function isSafeRecipient(address: string): boolean {
+  return address.length <= 254 && SINGLE_ADDRESS.test(address);
+}
+
 async function sendOnce(mail: OutgoingMail): Promise<void> {
   await getTransporter().sendMail({
     from: { name: SENDER_NAME, address: process.env.GMAIL_USER! },
@@ -62,6 +72,7 @@ async function sendOnce(mail: OutgoingMail): Promise<void> {
 
 /** 발송 실패 시 즉시 1회 재시도한다(PRD §9.2). 최종 실패면 마지막 오류를 던진다. */
 export async function sendMailWithRetry(mail: OutgoingMail): Promise<void> {
+  if (!isSafeRecipient(mail.to)) throw new Error("수신 이메일 주소 형식이 올바르지 않아 발송하지 않았습니다.");
   try {
     await sendOnce(mail);
   } catch {

@@ -1,4 +1,5 @@
 import "server-only";
+import { createHash, timingSafeEqual } from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { supabaseUrl } from "./url";
 
@@ -60,5 +61,7 @@ export async function verifyAdminRequest(req: Request): Promise<AdminIdentity | 
 export function verifyCronRequest(req: Request): boolean {
   const secret = process.env.CRON_SECRET;
   if (!secret) return false;
-  return req.headers.get("authorization") === `Bearer ${secret}`;
+  // 길이·내용 차이가 응답 시간으로 드러나지 않도록 해시 후 상수시간 비교한다.
+  const digest = (value: string) => createHash("sha256").update(value).digest();
+  return timingSafeEqual(digest(req.headers.get("authorization") ?? ""), digest(`Bearer ${secret}`));
 }

@@ -6,6 +6,7 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { jsonError, normalizePhone, PHONE_REGEX } from "@/lib/api";
 import { CERTIFICATES_BUCKET } from "@/lib/db-tables";
 import { buildCertificatePdfPath } from "@/lib/certificatePdf";
+import { isRateLimited, RATE_LIMIT_MESSAGE, recordFailure } from "@/lib/rateLimit";
 import type { Certificate, IssueCertificateResponse } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -27,6 +28,8 @@ interface AppRow {
 }
 
 export async function POST(req: Request) {
+  if (isRateLimited(req, "issue-certificate")) return jsonError(RATE_LIMIT_MESSAGE, 429);
+
   const parsed = issueSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return jsonError("입력값을 확인해 주세요.", 400);
 
@@ -41,6 +44,7 @@ export async function POST(req: Request) {
 
   if (error) return jsonError("조회 중 오류가 발생했습니다.", 500);
   if (!app || app.name !== name || app.phone_digits !== normalizePhone(phone)) {
+    recordFailure(req, "issue-certificate");
     return jsonError("일치하는 신청 내역이 없습니다. 성명과 연락처를 확인해 주세요.", 404);
   }
   if (app.status !== "이수") return jsonError("이수 상태인 세션만 수료증을 발급할 수 있습니다.", 400);
@@ -51,7 +55,8 @@ export async function POST(req: Request) {
     .single<Certificate>();
   if (rpcError || !cert) {
     console.error(`[issue-certificate] RPC 실패 (application_id=${applicationId}):`, rpcError);
-    return jsonError(rpcError?.message ?? "수료증 발급에 실패했습니다.", 500);
+    // DB 내부 오류 문구는 공개 응답에 싣지 않는다(서버 로그로만 남긴다).
+    return jsonError("수료증 발급에 실패했습니다. 잠시 후 다시 시도해 주세요.", 500);
   }
 
   const { data: templateRow } = await db

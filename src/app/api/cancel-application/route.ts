@@ -5,6 +5,7 @@ import { z } from "zod";
 import { createServiceClient } from "@/lib/supabase/server";
 import { jsonError, normalizePhone, PHONE_REGEX } from "@/lib/api";
 import { loadSettings, sendStatusChangeNotices } from "@/lib/email/service";
+import { isRateLimited, RATE_LIMIT_MESSAGE, recordFailure } from "@/lib/rateLimit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,6 +19,8 @@ const cancelSchema = z.object({
 const CANCELLABLE_STATUSES = ["신청완료", "대기"];
 
 export async function POST(req: Request) {
+  if (isRateLimited(req, "cancel")) return jsonError(RATE_LIMIT_MESSAGE, 429);
+
   const parsed = cancelSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return jsonError("입력값을 확인해 주세요.", 400);
 
@@ -34,6 +37,7 @@ export async function POST(req: Request) {
 
   // 존재 여부를 드러내지 않도록 미존재/본인 불일치를 같은 메시지로 처리한다.
   if (!app || app.name !== name || app.phone_digits !== normalizePhone(phone)) {
+    recordFailure(req, "cancel");
     return jsonError("일치하는 신청 내역이 없습니다. 성명과 연락처를 확인해 주세요.", 404);
   }
   if (app.status === "취소") return jsonError("이미 취소된 신청입니다.", 400);

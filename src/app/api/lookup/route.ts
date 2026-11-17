@@ -6,6 +6,7 @@ import { z } from "zod";
 import { createServiceClient } from "@/lib/supabase/server";
 import { jsonError, normalizePhone, PHONE_REGEX } from "@/lib/api";
 import { CERTIFICATES_BUCKET } from "@/lib/db-tables";
+import { isRateLimited, RATE_LIMIT_MESSAGE, recordFailure } from "@/lib/rateLimit";
 import type { ApplicationStatus, LookupResultItem } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -31,6 +32,8 @@ interface Row {
 }
 
 export async function POST(req: Request) {
+  if (isRateLimited(req, "lookup")) return jsonError(RATE_LIMIT_MESSAGE, 429);
+
   const parsed = lookupSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return jsonError("성명과 연락처를 확인해 주세요.", 400);
 
@@ -49,7 +52,10 @@ export async function POST(req: Request) {
 
   if (error) return jsonError("조회 중 오류가 발생했습니다.", 500);
   const rows = (data ?? []).filter((r) => r.workshop);
-  if (rows.length === 0) return NextResponse.json({ results: [] });
+  if (rows.length === 0) {
+    recordFailure(req, "lookup"); // 일치 건 없음 = 본인확인 실패로 집계
+    return NextResponse.json({ results: [] });
+  }
 
   const { data: certs } = await db
     .from("certificates")

@@ -63,6 +63,19 @@ STEPS = [
             "from public.workshops where round = 3;",
         ],
     },
+    {
+        "src": "0006_security_hardening.sql",
+        "out": "step6_security_hardening.sql",
+        "title": "보안 보강(함수 search_path 고정 · 수료증 버킷 PDF/10MB 제한)",
+        "check": [
+            "select",
+            "  (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace",
+            "    where n.nspname = 'public' and p.proname in ('set_updated_at', 'format_phone')",
+            "      and p.proconfig is not null) as 고정함수_기대값_2,",
+            "  (select allowed_mime_types::text || ' / ' || file_size_limit",
+            "    from storage.buckets where id = 'certificates') as 버킷제한_기대값_pdf_10485760;",
+        ],
+    },
 ]
 
 for i, step in enumerate(STEPS, start=1):
