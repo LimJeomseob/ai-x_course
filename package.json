@@ -10,6 +10,7 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "seed:legacy": "python3 scripts/generate_legacy_seed.py seed/legacy_certificates.csv supabase/migrations/0003_legacy_certificates.sql",
+    "seed:manual-2026-11-23": "python3 scripts/generate_legacy_seed.py seed/manual_certificates_2026-11-23.csv supabase/migrations/0006_certificates_2026-11-23.sql",
     "build:setup-sql": "python3 scripts/build_setup_sql.py",
     "build:og": "python3 scripts/build_og_image.py"
   },

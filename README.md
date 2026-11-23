@@ -21,11 +21,12 @@
 ## 구조
 
 ```
-supabase/migrations/   0001 스키마·트리거·RPC·RLS / 0002 시드 / 0003 레거시 대장 70건 / 0004 수료증 서식
+supabase/migrations/   0001 스키마·트리거·RPC·RLS / 0002 시드 / 0003 레거시 대장 70건 / 0004 수료증 서식 / 0005 3차 시간 변경 / 0006 대장 추가 이관 10건(179~188호)
 seed/legacy_certificates.csv          레거시 발급대장 원본(UTF-8 BOM)
-supabase/setup/step1~4_*.sql          SQL Editor 실행용 4단계 파일(migrations 0001~0004와 동일 내용)
-scripts/generate_legacy_seed.py       CSV → 0003 마이그레이션 생성(npm run seed:legacy)
-scripts/build_setup_sql.py            migrations → setup/step1~4 생성(npm run build:setup-sql)
+seed/manual_certificates_2026-11-23.csv  2026-11-23 대장 추가분(제2026-179~188호, GNU AI 중급 교육과정)
+supabase/setup/step1~6_*.sql          SQL Editor 실행용 6단계 파일(migrations 0001~0006과 동일 내용)
+scripts/generate_legacy_seed.py       CSV → 0003/0006 마이그레이션 생성(npm run seed:legacy / seed:manual-2026-11-23)
+scripts/build_setup_sql.py            migrations → setup/step1~6 생성(npm run build:setup-sql)
 scripts/build_og_image.py             public/brand/gnu-logo.png → 링크 미리보기(public/og-image.png)·파비콘(src/app/icon.png 등) 생성(npm run build:og)
 src/app/(portal)/*                    공개 포털 5탭
 src/app/admin/*                       관리자 포털
@@ -55,16 +56,18 @@ M2(상태 변경)는 관리자 상태변경 API 성공 직후 발송. `email_log
 
 ## 배포 절차
 
-1. Supabase 신규 프로젝트 생성 → SQL Editor에서 `supabase/setup/`의 4개 파일을 **번호 순서대로 1회씩** 실행
+1. Supabase 신규 프로젝트 생성 → SQL Editor에서 `supabase/setup/`의 6개 파일을 **번호 순서대로 1회씩** 실행
    | 순서 | 파일 | 확인 쿼리 기대값 |
    | --- | --- | --- |
    | 1 | `step1_schema.sql` | 테이블 11 |
    | 2 | `step2_seed.sql` | 운영일 4 · 세션 7 · 관리자 eros4424@gmail.com · 메일템플릿 5 |
    | 3 | `step3_legacy_certificates.sql` | 레거시 70 · 최대번호 70 |
    | 4 | `step4_certificate_template.sql` | 서식 1 · 이미지 2 |
+   | 5 | `step5_session3_time_change.sql` | 3차 시작 11/11 15:30 · 종료 17:30 |
+   | 6 | `step6_certificates_2026-11-23.sql` | 추가 이관 10 · 최대번호 188 (운영 중인 DB는 이 파일만 실행 → 다음 발급 `제2026-189호`) |
 
    각 파일은 트랜잭션이라 오류 시 해당 단계만 롤백된다. CLI 사용 시에는 `supabase db push`(`supabase/migrations/` 적용).
-   migrations 수정 후에는 `npm run build:setup-sql`로 4개 파일을 재생성한다.
+   migrations 수정 후에는 `npm run build:setup-sql`로 6개 파일을 재생성한다.
 2. Supabase Auth → Google Provider 활성화, Site URL·Redirect URLs에 Vercel 도메인(`https://<project>.vercel.app/admin/login`) 등록
 3. Vercel에 `LimJeomseob/ai-x_course` Git 연동 → 환경변수 등록(`.env.example` 참고)
    - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`

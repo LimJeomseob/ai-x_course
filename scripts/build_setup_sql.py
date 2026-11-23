@@ -63,6 +63,16 @@ STEPS = [
             "from public.workshops where round = 3;",
         ],
     },
+    {
+        "src": "0006_certificates_2026-11-23.sql",
+        "out": "step6_certificates_2026-11-23.sql",
+        "title": "발급대장 추가 이관 10건(제2026-179호~188호, GNU AI 중급 교육과정)",
+        "check": [
+            "select count(*) as 추가이관_기대값_10,",
+            "  max((regexp_match(cert_no, '-(\\d+)호$'))[1]::int) as 최대번호_기대값_188",
+            "from public.legacy_certificates where source = 'manual_import_2026-11-23';",
+        ],
+    },
 ]
 
 for i, step in enumerate(STEPS, start=1):

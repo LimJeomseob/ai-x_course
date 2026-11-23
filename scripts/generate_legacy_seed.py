@@ -1,5 +1,7 @@
 # 레거시 수료증 발급대장(seed/legacy_certificates.csv, UTF-8 BOM) → legacy_certificates INSERT 마이그레이션 생성
 #   사용법: python3 scripts/generate_legacy_seed.py seed/legacy_certificates.csv supabase/migrations/0003_legacy_certificates.sql
+#   추가 이관(발급번호가 001부터 시작하지 않는 CSV): 같은 명령에 CSV·출력 경로만 바꿔 실행
+#     → 번호 연속성은 CSV 첫 번호부터 검사하고, 시스템 발급분(certificates)과 번호가 겹치면 실행을 중단하는 가드를 넣는다.
 # 파싱 규칙(PRD §7.6, §13-B):
 #   - issued_at_raw "2026. 07. 23. 11:12" → KST timestamptz, "2026. 10. 13." → 해당일 00:00 KST, 공란 → NULL
 #   - reissue_raw "3회 (2026. 07. 31. 22:19)" → reissue_count=3, reissued_at, "0회" → 0 / NULL
@@ -62,15 +64,31 @@ with open(src, encoding="utf-8-sig", newline="") as f:
             )
         )
 
-assert sorted(serials) == list(range(1, len(rows) + 1)), "발급번호가 001부터 연속이 아닙니다"
+first, last = min(serials), max(serials)
+assert sorted(serials) == list(range(first, last + 1)), "발급번호가 연속이 아닙니다"
+cert_nos = [re.search(r"제\d{4}-\d+호", row).group(0) for row in rows]
 
 with open(dst, "w", encoding="utf-8") as out:
     out.write("-- ============================================================================\n")
-    out.write("-- 레거시 수료증 발급대장 이관 (제2026-001호 ~ 제2026-%03d호, %d건)\n" % (len(rows), len(rows)))
-    out.write("-- 자동 생성: scripts/generate_legacy_seed.py ← seed/legacy_certificates.csv (직접 수정 금지)\n")
-    out.write("-- 검증(PRD §10): count = %d, max serial = %d → 첫 신규 발급 = 제2026-%03d호\n"
-              % (len(rows), len(rows), len(rows) + 1))
+    if first == 1:
+        out.write("-- 레거시 수료증 발급대장 이관 (제2026-001호 ~ 제2026-%03d호, %d건)\n" % (len(rows), len(rows)))
+        out.write("-- 자동 생성: scripts/generate_legacy_seed.py ← seed/legacy_certificates.csv (직접 수정 금지)\n")
+        out.write("-- 검증(PRD §10): count = %d, max serial = %d → 첫 신규 발급 = 제2026-%03d호\n"
+                  % (len(rows), len(rows), len(rows) + 1))
+    else:
+        out.write("-- 수료증 발급대장 추가 이관 (제2026-%03d호 ~ 제2026-%03d호, %d건)\n" % (first, last, len(rows)))
+        out.write("-- 자동 생성: scripts/generate_legacy_seed.py ← %s (직접 수정 금지)\n" % src)
+        out.write("-- 검증: 이관 후 max serial = %d → 다음 신규 발급 = 제2026-%03d호\n" % (last, last + 1))
     out.write("-- ============================================================================\n\n")
+    if first != 1:
+        out.write("-- 가드: 같은 번호가 이미 시스템 발급분(certificates)에 있으면 중단(번호 중복 방지)\n")
+        out.write("do $$\nbegin\n")
+        out.write("  if exists (select 1 from public.certificates where cert_no in (\n    ")
+        out.write(", ".join(q(c) for c in cert_nos))
+        out.write("\n  )) then\n")
+        out.write("    raise exception '추가 이관 번호(제2026-%03d호~%03d호)가 이미 certificates에 존재합니다. 발급대장을 다시 확인하세요.';\n"
+                  % (first, last))
+        out.write("  end if;\nend\n$$;\n\n")
     out.write("insert into public.legacy_certificates\n")
     out.write("  (seq, cert_no, name, affiliation, course, period, issued_at, issued_at_raw,\n")
     out.write("   issued_channel, reissue_count, reissued_at, reissue_raw, issuer, pdf_status, source)\nvalues\n")
