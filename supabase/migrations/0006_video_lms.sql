@@ -156,7 +156,7 @@ with unioned as (
         coalesce(
           to_char(public.video_course_completed_at(a.id) at time zone 'Asia/Seoul', 'YYYY.MM.DD.'),
           to_char(c.issued_at at time zone 'Asia/Seoul', 'YYYY.MM.DD.')
-        ) || ' 동영상 강의 이수'
+        ) || ' AI활용 동영상 강의 이수'
       else
         to_char(w.start_at at time zone 'Asia/Seoul', 'YYYY.MM.DD. HH24:MI') || ' ~ '
           || to_char(w.end_at at time zone 'Asia/Seoul', 'HH24:MI')

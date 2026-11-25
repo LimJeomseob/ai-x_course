@@ -97,10 +97,10 @@ export function formatSessionTime(startIso: string, endIso: string, delivery?: "
   return delivery === "video" ? "상시 수강" : formatTimeRange(startIso, endIso);
 }
 
-/** 수료증 '기간' 란 — 동영상 강의: "2026.11.30. 동영상 강의 이수"(이수일 없으면 발급일) */
+/** 수료증 '기간' 란 — 동영상 강의: "2026.11.30. AI활용 동영상 강의 이수"(이수일 없으면 발급일) */
 export function formatCertVideoPeriod(completedOrIssuedIso: string): string {
   const p = kstParts(completedOrIssuedIso);
-  return `${p.y}.${p.m}.${p.d}. 동영상 강의 이수`;
+  return `${p.y}.${p.m}.${p.d}. AI활용 동영상 강의 이수`;
 }
 
 /** KST 기준 날짜 키(YYYY-MM-DD) — 운영일 D-N 계산·그룹핑용 */

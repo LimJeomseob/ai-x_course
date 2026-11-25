@@ -42,7 +42,7 @@ function hexToRgb(hex: string): { r: number; g: number; b: number } {
 /**
  * 수료증 서식 치환 값(PRD §5.5):
  * 프로그램명 = "AI-X 교과목 개발·인증을 위한 AI 활용 역량 강화 워크숍 {N차}({세션주제})",
- * 기간 = "2026.11.05. 13:30 ~ 15:30", 동영상 강의 = "2026.11.30. 동영상 강의 이수"(과정 이수일, 없으면 발급일)
+ * 기간 = "2026.11.05. 13:30 ~ 15:30", 동영상 강의 = "2026.11.30. AI활용 동영상 강의 이수"(과정 이수일, 없으면 발급일)
  */
 export function buildCertificateValues(input: {
   certNo: string;

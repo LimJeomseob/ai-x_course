@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import clsx from "clsx";
 import { IdentityForm } from "@/components/IdentityForm";
 import { formatClock, VideoLessonPlayer, type LessonWithProgress } from "@/components/VideoLessonPlayer";
 import { publicPost } from "@/lib/adminApi";
 import type { VideoLessonProgress, VideoSessionResponse } from "@/lib/types";
 import type { LookupInput } from "@/lib/validation";
+import { consumeVideoHandoff } from "@/lib/videoHandoff";
 
 /** 처음 열 차시: 이수하지 않은 첫 차시(영상 등록된 것) → 없으면 첫 차시 */
 function pickInitialLesson(lessons: LessonWithProgress[]): string | null {
@@ -21,6 +22,7 @@ export function VideoCourse() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [appliedBanner, setAppliedBanner] = useState<string | null>(null);
 
   const start = useCallback(async (input: LookupInput) => {
     setLoading(true);
@@ -37,6 +39,18 @@ export function VideoCourse() {
     }
   }, []);
 
+  // 「신청」 탭에서 신청 완료 직후 넘어온 경우: 본인확인을 건너뛰고 바로 수강 화면을 연다.
+  useEffect(() => {
+    const handoff = consumeVideoHandoff();
+    if (!handoff) return;
+    setAppliedBanner(
+      handoff.appliedCount > 1
+        ? `신청이 완료되었습니다(세션 ${handoff.appliedCount}개). 동영상 강의는 지금 바로 수강할 수 있습니다. 다른 세션의 신청 내역은 「신청내역조회」 탭에서 확인하세요.`
+        : "신청이 완료되었습니다. 지금 바로 동영상 강의를 수강할 수 있습니다."
+    );
+    void start({ name: handoff.name, phone: handoff.phone });
+  }, [start]);
+
   const onProgress = useCallback((lessonId: string, progress: VideoLessonProgress) => {
     setCourse((prev) =>
       prev ? { ...prev, lessons: prev.lessons.map((l) => (l.id === lessonId ? { ...l, progress } : l)) } : prev
@@ -52,9 +66,21 @@ export function VideoCourse() {
     if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
   }, []);
 
+  const banner = appliedBanner && (
+    <p role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm font-medium text-emerald-900">
+      {appliedBanner}
+    </p>
+  );
+
   if (!identity || !course) {
     return (
       <div className="flex flex-col gap-4">
+        {banner}
+        {loading && appliedBanner && (
+          <p role="status" className="text-sm text-slate-500">
+            수강 정보를 불러오는 중...
+          </p>
+        )}
         <IdentityForm submitLabel="수강 시작" loading={loading} onSubmit={start} />
         {error && (
           <p role="alert" className="rounded-lg bg-red-50 p-4 text-sm font-medium text-red-700">
@@ -72,6 +98,7 @@ export function VideoCourse() {
 
   return (
     <div className="flex flex-col gap-6">
+      {banner}
       <section aria-label="수강 현황" className="rounded-xl border border-slate-200 bg-white p-5 shadow-card">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>

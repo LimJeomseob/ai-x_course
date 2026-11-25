@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import clsx from "clsx";
 import { Button } from "@/components/ui/Button";
 import { FormField, inputBaseClass } from "@/components/ui/FormField";
@@ -11,6 +11,7 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { AXIS_OPTIONS } from "@/lib/constants";
 import { formatPhoneInput, formatSessionTime } from "@/lib/format";
 import { applicationSchema, fieldErrors } from "@/lib/validation";
+import { saveVideoHandoff } from "@/lib/videoHandoff";
 import {
   deriveSessionStatus,
   fetchProgramData,
@@ -64,6 +65,11 @@ export function ApplicationForm() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [result, setResult] = useState<ApplySessionsResponse | null>(null);
   const [now] = useState(() => Date.now());
+  const router = useRouter();
+  const videoSessionIds = useMemo(
+    () => new Set((data?.days ?? []).flatMap((d) => d.sessions.filter((s) => s.delivery === "video").map((s) => s.id))),
+    [data]
+  );
 
   useEffect(() => {
     fetchProgramData()
@@ -150,7 +156,20 @@ export function ApplicationForm() {
       setSubmitError(error?.message ?? "신청 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.");
       return;
     }
-    setResult(response as ApplySessionsResponse);
+    const applied = response as ApplySessionsResponse;
+    const succeeded = applied.results.filter((r) => r.ok);
+    const videoApplied = succeeded.some((r) => videoSessionIds.has(r.workshop_id));
+
+    // 동영상 강의 신청이 성공하면 본인확인 정보를 넘기고 바로 「동영상 강의」 탭으로 이동한다.
+    // 실패한 세션이 섞여 있으면 결과 화면을 먼저 보여 주고, 거기서 이동 버튼을 누르게 한다.
+    if (videoApplied) {
+      saveVideoHandoff({ name: v.name, phone: v.phone, appliedCount: succeeded.length });
+      if (succeeded.length === applied.results.length) {
+        router.push("/video");
+        return;
+      }
+    }
+    setResult(applied);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -399,20 +418,25 @@ function ApplyResult({
               return (
                 <li key={r.workshop_id}>
                   ✔ {info?.day.day_label} {r.round_label}{" "}
-                  {info ? formatSessionTime(info.session.start_at, info.session.end_at, info.session.delivery) : ""} · {r.topic}
+                  {info && info.session.delivery !== "video" ? `${formatSessionTime(info.session.start_at, info.session.end_at)} ` : ""}
+                  · {r.topic}
                 </li>
               );
             })}
           </ul>
           <p className="mt-3 text-sm text-emerald-800">신청 결과 안내 메일은 매일 18:00에 일괄 발송됩니다.</p>
           {succeeded.some((r) => sessionById.get(r.workshop_id)?.session.delivery === "video") && (
-            <p className="mt-1 text-sm font-medium text-emerald-900">
-              동영상 강의는 안내 메일 없이 지금 바로{" "}
-              <Link href="/video" className="underline underline-offset-2">
-                「동영상 강의」 탭
+            <div className="mt-4 flex flex-col gap-2 rounded-xl border border-emerald-300 bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm font-medium text-emerald-900">
+                동영상 강의는 안내 메일 없이 지금 바로 수강할 수 있습니다.
+              </p>
+              <Link
+                href="/video"
+                className="inline-flex shrink-0 items-center justify-center rounded-lg bg-emerald-600 px-5 py-2.5 font-bold text-white shadow-card hover:bg-emerald-700"
+              >
+                동영상 강의 바로 수강하기
               </Link>
-              에서 같은 성명·연락처로 수강할 수 있습니다.
-            </p>
+            </div>
           )}
         </div>
       ) : (
