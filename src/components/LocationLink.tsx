@@ -9,11 +9,12 @@ interface LocationLinkProps {
 
 /**
  * 장소 표시 공통 규칙(PRD §5.6): 대면 장소 텍스트 자체를 네이버 지도 링크(새 창)로 렌더링한다.
- * 온라인 세션은 지도 링크 없이 "온라인(Zoom)" 텍스트만 표시한다(Zoom 링크는 메일로만 발송).
+ * 온라인 세션은 지도 링크 없이 운영일의 장소 텍스트만 표시한다(Zoom 링크는 메일로만 발송).
+ * 예: 3차 "온라인(Zoom)", 동영상 강의 "온라인(동영상 강의)" — workshop_days.location 값을 그대로 쓴다.
  */
 export function LocationLink({ location, url, isOnline, className }: LocationLinkProps) {
   if (isOnline || !url) {
-    return <span className={className}>{isOnline ? "온라인(Zoom)" : location}</span>;
+    return <span className={className}>{location || (isOnline ? "온라인" : "")}</span>;
   }
   return (
     <a
