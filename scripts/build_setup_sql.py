@@ -74,6 +74,15 @@ STEPS = [
             "  (select count(*) from public.video_lessons where youtube_id is null) as 영상ID_미등록_차시수;",
         ],
     },
+    {
+        "src": "0007_video_topic_chatgpt.sql",
+        "out": "step7_video_topic_chatgpt.sql",
+        "title": "동영상 강의(8차) 주제 변경 'Claude 스킬·MCP 활용' → 'ChatGPT 스킬·MCP 활용'",
+        "check": [
+            "select round_label, topic as 주제_기대값_ChatGPT_스킬_MCP_활용",
+            "from public.workshops where delivery = 'video';",
+        ],
+    },
 ]
 
 for i, step in enumerate(STEPS, start=1):
