@@ -10,6 +10,7 @@
 | 공개 | `/` | 소개 · 운영개요 · 수료 혜택 · 운영일 카드 4개(세션 7개, 세션별 정원·잔여) · 강사 프로필 모달 |
 | 공개 | `/apply` | 세션 단위 신청, 운영일별 복수 선택 1회 제출(`?round=N`, `?day=A`) |
 | 공개 | `/lookup` | 성명+연락처 본인확인 · 세션 단위 취소 · 수료증 다운로드 |
+| 공개 | `/video` | 동영상 강의 — 성명+연락처 확인 → 4개 차시 YouTube 시청(차시별 실제 시청 90% 이상 이수) → 전 차시 이수 시 신청 상태 '이수' |
 | 공개 | `/survey` | 만족도조사(문항 v0.9) |
 | 공개 | `/certificate` | 이수 세션별 수료증 PDF 본인 발급 |
 | 관리자 | `/admin/applicants` | 필터·검색·상태변경(M2 즉시 발송)·이수처리·수료증 발급·안내확인·수동 발송·CSV·대리등록·출석부 업로드 |
@@ -42,6 +43,30 @@ src/lib/email/*                       Gmail 발송·템플릿·M1~M5 발송 서�
 - `zoom_link`·`prelearning_url`은 공개 역할에 컬럼 SELECT 권한 없음(메일로만 발송)
 - 협조사항 = 운영일 공통(`workshop_days.notes`) + 세션 추가(`workshops.notes`)
 
+## 동영상 강의(`/video`, migration 0006)
+
+- 동영상 과정은 `workshops.delivery = 'video'`인 세션(8차 「동영상 강의」, Day E 상시)이다. 신청 → 이수 → 수료증 발급 → 발급대장은 기존 흐름을 그대로 쓴다.
+- 영상은 **YouTube 임베드로만** 재생한다. mp4 원본은 저장소·Supabase에 올리지 않는다(`/동영상 강의/`는 `.gitignore`).
+- 차시(`video_lessons`)마다 실제 시청 구간 ≥ `pass_ratio`(기본 0.9)면 차시 이수. 판정값 = min(본 구간 합, 실제 재생 누적) ÷ 영상 길이.
+  건너뛴 구간·일시정지·다른 탭 시간은 제외, 배속 재생은 1배속으로 되돌린다. 서버는 재생 누적을 "처음 재생 시각부터의 경과 시간 + 15초"로 상한을 둔다.
+- 전 차시 이수 시 `video_finalize_course()`가 `applications.status`를 '신청완료' → '이수'로 바꾼다. 수료증 '기간' 란은 과정 이수일(`video_course_completed_at()`).
+- 차시가 끝나도 다음 차시는 자동재생하지 않는다. 안내 화면(다음 강의 제목·길이·`intro_text`)에서 「다음 강의로 이동」을 눌러야 넘어가며, 누른 시각은 `video_progress.next_confirmed_at`에 남는다.
+- 자동 안내 메일(M1·M3·M5·M4)은 동영상 세션을 제외한다. 동영상 세션은 이수 전이면 언제든 본인 취소할 수 있다.
+- API: `POST /api/video/session`(진입) · `/api/video/heartbeat`(재생 시작·30초·일시정지·화면 이탈 시 기록) · `/api/video/complete`(차시 판정) · `/api/video/next`(다음 강의 이동 기록)
+
+### 동영상 강의 영상 ID 등록
+
+YouTube에 **일부 공개 + 퍼가기 허용**으로 올린 뒤, 주소의 `v=` 뒤 11자를 SQL Editor에서 등록한다. 등록 전 차시는 화면에 "준비 중"으로 표시된다.
+
+```sql
+update public.video_lessons l set youtube_id = v.yt
+from (values (1, 'XXXXXXXXXXX'), (2, 'XXXXXXXXXXX'), (3, 'XXXXXXXXXXX'), (4, 'XXXXXXXXXXX')) as v(no, yt),
+     public.workshops w
+where w.delivery = 'video' and l.workshop_id = w.id and l.lesson_no = v.no;
+```
+
+수강 기간(기본 2026-11-25 ~ 12-31) 변경: `update public.workshops set end_at = …, deadline = … where delivery = 'video';`
+
 ## 자동 메일(PRD §9)
 
 | Cron(UTC) | KST | 경로 | 내용 |
@@ -55,16 +80,18 @@ M2(상태 변경)는 관리자 상태변경 API 성공 직후 발송. `email_log
 
 ## 배포 절차
 
-1. Supabase 신규 프로젝트 생성 → SQL Editor에서 `supabase/setup/`의 4개 파일을 **번호 순서대로 1회씩** 실행
+1. Supabase 신규 프로젝트 생성 → SQL Editor에서 `supabase/setup/`의 6개 파일을 **번호 순서대로 1회씩** 실행
    | 순서 | 파일 | 확인 쿼리 기대값 |
    | --- | --- | --- |
    | 1 | `step1_schema.sql` | 테이블 11 |
    | 2 | `step2_seed.sql` | 운영일 4 · 세션 7 · 관리자 eros4424@gmail.com · 메일템플릿 5 |
    | 3 | `step3_legacy_certificates.sql` | 레거시 70 · 최대번호 70 |
    | 4 | `step4_certificate_template.sql` | 서식 1 · 이미지 2 |
+   | 5 | `step5_session3_time_change.sql` | 3차 11/11 15:30~17:30 |
+   | 6 | `step6_video_lms.sql` | 동영상 세션 1 · 차시 4 |
 
    각 파일은 트랜잭션이라 오류 시 해당 단계만 롤백된다. CLI 사용 시에는 `supabase db push`(`supabase/migrations/` 적용).
-   migrations 수정 후에는 `npm run build:setup-sql`로 4개 파일을 재생성한다.
+   migrations 수정 후에는 `npm run build:setup-sql`로 단계 파일을 재생성한다.
 2. Supabase Auth → Google Provider 활성화, Site URL·Redirect URLs에 Vercel 도메인(`https://<project>.vercel.app/admin/login`) 등록
 3. Vercel에 `LimJeomseob/ai-x_course` Git 연동 → 환경변수 등록(`.env.example` 참고)
    - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`

@@ -6,7 +6,7 @@ import { InstructorModal } from "@/components/InstructorModal";
 import { LocationLink } from "@/components/LocationLink";
 import { LevelBadge, PhaseBadge } from "@/components/ui/Badges";
 import { findInstructor, type InstructorProfile } from "@/lib/constants";
-import { formatTimeRange } from "@/lib/format";
+import { formatSessionTime } from "@/lib/format";
 import {
   deriveSessionStatus,
   fetchProgramData,
@@ -115,7 +115,9 @@ export function ProgramCards() {
                         <div className="min-w-0 flex-1">
                           <p className="font-bold text-slate-900">
                             <span className="text-brand">{session.round_label}</span>{" "}
-                            <span className="text-slate-500">{formatTimeRange(session.start_at, session.end_at)}</span>
+                            <span className="text-slate-500">
+                              {formatSessionTime(session.start_at, session.end_at, session.delivery)}
+                            </span>
                             {" · "}
                             {session.topic}
                           </p>
@@ -147,6 +149,11 @@ export function ProgramCards() {
                           >
                             이 세션 신청
                           </Link>
+                          {session.delivery === "video" && (
+                            <Link href="/video" className="text-xs font-semibold text-accent underline underline-offset-2 hover:text-brand">
+                              신청 후 동영상 강의 탭에서 수강
+                            </Link>
+                          )}
                         </div>
                       </div>
                     </li>

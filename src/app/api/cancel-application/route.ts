@@ -26,9 +26,15 @@ export async function POST(req: Request) {
 
   const { data: app, error } = await db
     .from("applications")
-    .select("id, name, phone_digits, status, workshop:workshops(start_at)")
+    .select("id, name, phone_digits, status, workshop:workshops(start_at, delivery)")
     .eq("id", applicationId)
-    .maybeSingle<{ id: string; name: string; phone_digits: string; status: string; workshop: { start_at: string } | null }>();
+    .maybeSingle<{
+      id: string;
+      name: string;
+      phone_digits: string;
+      status: string;
+      workshop: { start_at: string; delivery: "live" | "video" } | null;
+    }>();
 
   if (error) return jsonError("조회 중 오류가 발생했습니다.", 500);
 
@@ -39,7 +45,8 @@ export async function POST(req: Request) {
   if (app.status === "취소") return jsonError("이미 취소된 신청입니다.", 400);
   if (!CANCELLABLE_STATUSES.includes(app.status)) return jsonError("이수 완료된 신청은 취소할 수 없습니다.", 400);
   if (!app.workshop) return jsonError("세션 정보를 확인할 수 없습니다.", 500);
-  if (Date.now() >= new Date(app.workshop.start_at).getTime()) {
+  // 동영상 강의는 상시 수강이라 이수 전이면 언제든 취소할 수 있다.
+  if (app.workshop.delivery !== "video" && Date.now() >= new Date(app.workshop.start_at).getTime()) {
     return jsonError("세션이 시작된 이후에는 취소할 수 없습니다.", 400);
   }
 

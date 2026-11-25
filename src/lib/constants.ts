@@ -15,7 +15,7 @@ export const MAP_URL = "https://naver.me/5chMgpBo";
 /** 신청 오픈 기본값(PRD §8) — DB workshops.apply_open_at 기본값과 동일 */
 export const APPLICATION_OPEN_AT = "2026-10-21T09:00:00+09:00";
 
-export const MAX_SESSIONS_PER_PERSON = 7;
+export const MAX_SESSIONS_PER_PERSON = 8; // 1~7차 + 동영상 강의(0006_video_lms.sql apply_sessions 상한과 같아야 함)
 
 /** 정원 9999 이상은 "제한 없음"으로 표기(온라인 3차) */
 export const UNLIMITED_CAPACITY = 9999;

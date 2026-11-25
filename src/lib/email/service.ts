@@ -25,7 +25,7 @@ const NOTICE_FIELD_BY_TYPE: Partial<Record<EmailType, string>> = {
 };
 
 const APP_SELECT =
-  "id, name, email, status, created_at, workshop:workshops(id, round, round_label, topic, start_at, end_at, notes, zoom_link, prelearning_url, day:workshop_days(day_code, day_label, location, location_url, is_online, instructor, instructor_title, instructor_org, notes))";
+  "id, name, email, status, created_at, workshop:workshops(id, round, round_label, topic, start_at, end_at, delivery, notes, zoom_link, prelearning_url, day:workshop_days(day_code, day_label, location, location_url, is_online, instructor, instructor_title, instructor_org, notes))";
 
 // 세션 시작일 조건을 걸기 위해 workshop 임베드를 inner join으로 지정한다.
 const APP_SELECT_INNER = APP_SELECT.replace("workshop:workshops(", "workshop:workshops!inner(");
@@ -191,6 +191,9 @@ async function queryApps(
   if (opts.createdBefore) query = query.lte("created_at", opts.createdBefore);
   if (opts.startFrom) query = query.gte("workshop.start_at", opts.startFrom);
   if (opts.startTo) query = query.lt("workshop.start_at", opts.startTo);
+  // 자동 안내(M1·M3·M5·M4)는 일시가 있는 세션만 대상 — 동영상 강의(상시 수강)는 제외한다.
+  // 관리자 상태변경(M2)·수동 발송처럼 신청 ID를 지정한 경우는 그대로 둔다.
+  if (!opts.ids) query = query.eq("workshop.delivery", "live");
   const { data, error } = await query.neq("email", "").returns<AppRow[]>();
   if (error) throw new Error(`신청 데이터 조회 실패: ${error.message}`);
   return (data ?? []).filter((r) => r.workshop && r.workshop.day);

@@ -1,5 +1,5 @@
 import { PROGRAM_NAME } from "@/lib/constants";
-import { formatCertIssueDate, formatCertPeriod } from "@/lib/format";
+import { formatCertIssueDate, formatCertPeriod, formatCertVideoPeriod } from "@/lib/format";
 import type { CertificateTemplate, CertificateTemplateText } from "@/lib/types";
 
 // 수료증 PDF는 발급하는 사람의 브라우저에서 생성한다(참조 시스템 승계 — 서버는 채번·서식·업로드 토큰만 담당).
@@ -42,7 +42,7 @@ function hexToRgb(hex: string): { r: number; g: number; b: number } {
 /**
  * 수료증 서식 치환 값(PRD §5.5):
  * 프로그램명 = "AI-X 교과목 개발·인증을 위한 AI 활용 역량 강화 워크숍 {N차}({세션주제})",
- * 기간 = "2026.11.05. 13:30 ~ 15:30"
+ * 기간 = "2026.11.05. 13:30 ~ 15:30", 동영상 강의 = "2026.11.30. AI활용 동영상 강의 이수"(과정 이수일, 없으면 발급일)
  */
 export function buildCertificateValues(input: {
   certNo: string;
@@ -53,13 +53,18 @@ export function buildCertificateValues(input: {
   startAt: string;
   endAt: string;
   issuedAt: string;
+  delivery?: "live" | "video";
+  completedAt?: string | null;
 }): Record<string, string> {
   return {
     발급번호: input.certNo,
     성명: input.name,
     소속: input.affiliation,
     프로그램명: `${PROGRAM_NAME} ${input.roundLabel}(${input.topic})`,
-    기간: formatCertPeriod(input.startAt, input.endAt),
+    기간:
+      input.delivery === "video"
+        ? formatCertVideoPeriod(input.completedAt ?? input.issuedAt)
+        : formatCertPeriod(input.startAt, input.endAt),
     발급일: formatCertIssueDate(input.issuedAt),
   };
 }

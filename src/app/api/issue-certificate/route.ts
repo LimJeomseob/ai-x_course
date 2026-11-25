@@ -23,7 +23,14 @@ interface AppRow {
   phone_digits: string;
   affiliation: string;
   status: string;
-  workshop: { round: number; round_label: string; topic: string; start_at: string; end_at: string } | null;
+  workshop: {
+    round: number;
+    round_label: string;
+    topic: string;
+    start_at: string;
+    end_at: string;
+    delivery: "live" | "video";
+  } | null;
 }
 
 export async function POST(req: Request) {
@@ -35,7 +42,7 @@ export async function POST(req: Request) {
 
   const { data: app, error } = await db
     .from("applications")
-    .select("id, name, phone_digits, affiliation, status, workshop:workshops(round, round_label, topic, start_at, end_at)")
+    .select("id, name, phone_digits, affiliation, status, workshop:workshops(round, round_label, topic, start_at, end_at, delivery)")
     .eq("id", applicationId)
     .maybeSingle<AppRow>();
 
@@ -74,6 +81,13 @@ export async function POST(req: Request) {
     await db.from("certificates").update({ pdf_path: pdfPath }).eq("id", cert.id);
   }
 
+  // 동영상 강의: 수료증 '기간' 란에 과정 이수일을 쓴다(없으면 발급일).
+  let completedAt: string | null = null;
+  if (app.workshop.delivery === "video") {
+    const { data: done } = await db.rpc("video_course_completed_at", { p_application_id: applicationId });
+    completedAt = typeof done === "string" ? done : null;
+  }
+
   const body: IssueCertificateResponse = {
     certNo: cert.cert_no,
     issuedAt: cert.issued_at,
@@ -85,6 +99,8 @@ export async function POST(req: Request) {
     topic: app.workshop.topic,
     startAt: app.workshop.start_at,
     endAt: app.workshop.end_at,
+    delivery: app.workshop.delivery,
+    completedAt,
     template: templateRow.template,
     upload: { path: signedUpload.path, token: signedUpload.token },
   };
