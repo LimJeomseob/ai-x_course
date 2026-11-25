@@ -83,6 +83,16 @@ STEPS = [
             "from public.workshops where delivery = 'video';",
         ],
     },
+    {
+        "src": "0008_video_youtube_ids.sql",
+        "out": "step8_video_youtube_ids.sql",
+        "title": "동영상 강의(8차) YouTube 영상 ID 4편 등록 + 1차시 안내문 'ChatGPT 스킬' 수정",
+        "check": [
+            "select l.lesson_no as 차시, l.title as 제목, l.youtube_id as 영상ID, l.intro_text as 안내문",
+            "from public.video_lessons l join public.workshops w on w.id = l.workshop_id",
+            "where w.delivery = 'video' order by l.lesson_no;",
+        ],
+    },
 ]
 
 for i, step in enumerate(STEPS, start=1):

@@ -80,7 +80,7 @@ M2(상태 변경)는 관리자 상태변경 API 성공 직후 발송. `email_log
 
 ## 배포 절차
 
-1. Supabase 신규 프로젝트 생성 → SQL Editor에서 `supabase/setup/`의 7개 파일을 **번호 순서대로 1회씩** 실행
+1. Supabase 신규 프로젝트 생성 → SQL Editor에서 `supabase/setup/`의 8개 파일을 **번호 순서대로 1회씩** 실행
    | 순서 | 파일 | 확인 쿼리 기대값 |
    | --- | --- | --- |
    | 1 | `step1_schema.sql` | 테이블 11 |
@@ -90,6 +90,7 @@ M2(상태 변경)는 관리자 상태변경 API 성공 직후 발송. `email_log
    | 5 | `step5_session3_time_change.sql` | 3차 11/11 15:30~17:30 |
    | 6 | `step6_video_lms.sql` | 동영상 세션 1 · 차시 4 |
    | 7 | `step7_video_topic_chatgpt.sql` | 동영상 주제 ChatGPT 스킬·MCP 활용 |
+   | 8 | `step8_video_youtube_ids.sql` | 차시 4편 모두 영상ID 등록 · 1차시 안내문 ChatGPT |
 
    각 파일은 트랜잭션이라 오류 시 해당 단계만 롤백된다. CLI 사용 시에는 `supabase db push`(`supabase/migrations/` 적용).
    migrations 수정 후에는 `npm run build:setup-sql`로 단계 파일을 재생성한다.
