@@ -15,7 +15,7 @@ export const MAP_URL = "https://naver.me/5chMgpBo";
 /** 신청 오픈 기본값(PRD §8) — DB workshops.apply_open_at 기본값과 동일 */
 export const APPLICATION_OPEN_AT = "2026-10-21T09:00:00+09:00";
 
-export const MAX_SESSIONS_PER_PERSON = 7;
+export const MAX_SESSIONS_PER_PERSON = 8; // 1~7차 + 동영상 강의(0006_video_lms.sql apply_sessions 상한과 같아야 함)
 
 /** 정원 9999 이상은 "제한 없음"으로 표기(온라인 3차) */
 export const UNLIMITED_CAPACITY = 9999;
@@ -62,17 +62,7 @@ export const SCHEDULE_CHANGE_NOTICES: {
   before: string;
   after: string;
   note: string;
-}[] = [
-  {
-    title: "3차 워크숍 운영시간 변경 안내",
-    apology:
-      "홈페이지 공지 오류로 3차 운영시간이 잘못 안내되었습니다. 혼란을 드려 죄송합니다.",
-    session: "3차 · 11/11(수) · 온라인(Zoom) · AI 윤리 가이드 강의계획서 반영 / AI 활용 과정평가 루브릭·CQI",
-    before: "13:30~15:30",
-    after: "15:30~17:30",
-    note: "기존 신청 내역은 그대로 유지되며, Zoom 링크는 D-1(11/10)에 이메일로 발송됩니다. 일정 확인에 양해 부탁드립니다.",
-  },
-];
+}[] = [];
 
 /** AXIS 참여여부(신청 §5.2, 설문 S2) */
 export const AXIS_OPTIONS: { value: AxisParticipant; label: string; short: string }[] = [

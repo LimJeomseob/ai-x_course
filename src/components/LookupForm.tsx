@@ -6,7 +6,7 @@ import { CancelConfirmModal } from "@/components/CancelConfirmModal";
 import { LocationLink } from "@/components/LocationLink";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { publicPost } from "@/lib/adminApi";
-import { formatTimeRange } from "@/lib/format";
+import { formatSessionTime } from "@/lib/format";
 import { groupLookupByDay } from "@/lib/lookup";
 import type { LookupResultItem } from "@/lib/types";
 import type { LookupInput } from "@/lib/validation";
@@ -83,12 +83,13 @@ export function LookupForm() {
             <ul className="divide-y divide-slate-100">
               {group.items.map((item) => {
                 const cancellable =
-                  (item.status === "신청완료" || item.status === "대기") && now < new Date(item.startAt).getTime();
+                  (item.status === "신청완료" || item.status === "대기") &&
+                  (item.delivery === "video" || now < new Date(item.startAt).getTime());
                 return (
                   <li key={item.applicationId} className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
                     <div className="min-w-0">
                       <p className="font-semibold text-slate-900">
-                        {item.roundLabel} {formatTimeRange(item.startAt, item.endAt)} · {item.topic}
+                        {item.roundLabel} {formatSessionTime(item.startAt, item.endAt, item.delivery)} · {item.topic}
                       </p>
                       <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-slate-600">
                         <StatusBadge status={item.status} />

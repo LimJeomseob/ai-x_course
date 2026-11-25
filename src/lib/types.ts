@@ -43,7 +43,11 @@ export interface Workshop {
   apply_open_at: string;
   notes: string;
   created_at: string;
+  /** live = 일시가 정해진 세션, video = 동영상 강의(상시 수강) */
+  delivery: WorkshopDelivery;
 }
+
+export type WorkshopDelivery = "live" | "video";
 
 /** 관리자 세션 관리 화면 전용(서버 API가 service role로 조회) */
 export interface WorkshopAdminLinks {
@@ -91,7 +95,7 @@ export interface Application {
 
 export type WorkshopSummary = Pick<
   Workshop,
-  "id" | "round" | "round_label" | "topic" | "start_at" | "end_at"
+  "id" | "round" | "round_label" | "topic" | "start_at" | "end_at" | "delivery"
 > & { day: Pick<WorkshopDay, "day_code" | "day_label" | "location" | "location_url" | "is_online"> };
 
 export interface ApplicationWithWorkshop extends Application {
@@ -212,6 +216,9 @@ export interface IssueCertificateResponse {
   topic: string;
   startAt: string;
   endAt: string;
+  delivery: WorkshopDelivery;
+  /** 동영상 강의: 과정 이수 시각(수료증 '기간' 표기). 대면 세션은 null */
+  completedAt: string | null;
   template: CertificateTemplate;
   upload: { path: string; token: string };
 }
@@ -232,6 +239,47 @@ export interface LookupResultItem {
   status: ApplicationStatus;
   certNo: string | null;
   certDownloadUrl: string | null;
+  delivery: WorkshopDelivery;
+}
+
+/** video_lessons — 동영상 강의 차시(youtube_id NULL = 영상 준비 중) */
+export interface VideoLesson {
+  id: string;
+  lesson_no: number;
+  title: string;
+  youtube_id: string | null;
+  duration_sec: number;
+  pass_ratio: number;
+  intro_text: string;
+}
+
+/** 차시별 시청 상태(공개 API 응답) */
+export interface VideoLessonProgress {
+  watchedSec: number;
+  ranges: [number, number][];
+  coverageRatio: number;
+  lastPositionSec: number;
+  completed: boolean;
+  completedAt: string | null;
+}
+
+/** POST /api/video/session 응답 */
+export interface VideoSessionResponse {
+  applicationId: string;
+  name: string;
+  status: ApplicationStatus;
+  courseTitle: string;
+  lessons: (VideoLesson & { progress: VideoLessonProgress })[];
+  courseCompleted: boolean;
+}
+
+/** POST /api/video/heartbeat · /api/video/complete 응답 */
+export interface VideoProgressResponse {
+  lessonId: string;
+  progress: VideoLessonProgress;
+  /** complete 전용: 기준 미달 시 남은 초 */
+  remainingSec?: number;
+  courseCompleted?: boolean;
 }
 
 export type EmailType = "M1" | "M2" | "M3" | "M4" | "M5";

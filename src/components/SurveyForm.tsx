@@ -15,7 +15,7 @@ import {
   SURVEY_OPEN_QUESTIONS,
   type LikertKey,
 } from "@/lib/constants";
-import { formatTimeRange } from "@/lib/format";
+import { formatSessionTime } from "@/lib/format";
 import { fieldErrors, surveySchema } from "@/lib/validation";
 import { fetchProgramData, type DayWithSessions } from "@/lib/workshops";
 
@@ -204,7 +204,7 @@ export function SurveyForm() {
                 <optgroup key={day.id} label={`${day.day_label} · ${day.instructor} ${day.instructor_title}`}>
                   {day.sessions.map((s) => (
                     <option key={s.id} value={s.round}>
-                      {s.round_label} {formatTimeRange(s.start_at, s.end_at)} · {s.topic}
+                      {s.round_label} {formatSessionTime(s.start_at, s.end_at, s.delivery)} · {s.topic}
                     </option>
                   ))}
                 </optgroup>

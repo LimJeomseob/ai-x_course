@@ -11,7 +11,7 @@ import { adminFetch } from "@/lib/adminApi";
 import { CERTIFICATES_BUCKET, TABLES, WORKSHOP_SUMMARY_SELECT } from "@/lib/db-tables";
 import { AXIS_OPTIONS, axisLabel, EMAIL_TYPE_LABELS, EMAIL_TYPES_ORDERED, NOTICE_COLUMNS, type NoticeField } from "@/lib/constants";
 import { exportRowsAsCsv, type CsvColumn } from "@/lib/csv";
-import { formatDateTime, formatPhone, formatTimeRange, kstDateKey } from "@/lib/format";
+import { formatDateTime, formatPhone, formatSessionTime, kstDateKey } from "@/lib/format";
 import { issueCertificatesForApplications } from "@/lib/issueCertificate";
 import { fetchProgramData, type DayWithSessions, type SessionOption } from "@/lib/workshops";
 import { APPLICATION_STATUSES, type ApplicationStatus, type ApplicationWithWorkshop } from "@/lib/types";
@@ -247,7 +247,7 @@ export function ApplicantsTable() {
     const columns: CsvColumn<ApplicationWithWorkshop>[] = [
       { header: "운영일", accessor: (r) => r.workshop?.day?.day_label },
       { header: "세션", accessor: (r) => `${r.workshop?.round_label} ${r.workshop?.topic}` },
-      { header: "세션 시간", accessor: (r) => (r.workshop ? formatTimeRange(r.workshop.start_at, r.workshop.end_at) : "") },
+      { header: "세션 시간", accessor: (r) => (r.workshop ? formatSessionTime(r.workshop.start_at, r.workshop.end_at, r.workshop.delivery) : "") },
       { header: "신청일", accessor: (r) => formatDateTime(r.created_at) },
       { header: "성명", accessor: (r) => r.name },
       { header: "소속", accessor: (r) => r.affiliation },
@@ -381,7 +381,7 @@ export function ApplicantsTable() {
                 <tr key={r.id} className={clsx("align-top", r.created_by_admin && "border-l-4 border-amber-400", selected.has(r.id) && "bg-accent/5")}>
                   <td className="px-3 py-2"><input type="checkbox" aria-label={`${r.name} ${r.workshop?.round_label} 선택`} checked={selected.has(r.id)} onChange={() => toggleOne(r.id)} /></td>
                   <td className="whitespace-nowrap px-3 py-2" title={r.workshop?.day?.location}>{r.workshop?.day?.day_label}</td>
-                  <td className="px-3 py-2" title={`${r.workshop ? formatTimeRange(r.workshop.start_at, r.workshop.end_at) : ""} · ${r.workshop?.day?.location ?? ""}`}>
+                  <td className="px-3 py-2" title={`${r.workshop ? formatSessionTime(r.workshop.start_at, r.workshop.end_at, r.workshop.delivery) : ""} · ${r.workshop?.day?.location ?? ""}`}>
                     <strong>{r.workshop?.round_label}</strong> {r.workshop?.topic}
                   </td>
                   <td className="whitespace-nowrap px-3 py-2 text-xs text-slate-500">{formatDateTime(r.created_at)}</td>

@@ -25,6 +25,10 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# 동영상 강의 원본(mp4) — 저장소·Supabase에 올리지 않고 YouTube로만 스트리밍한다
+/동영상 강의/
+*.mp4
+
 # supabase
 supabase/.branches
 supabase/.temp
