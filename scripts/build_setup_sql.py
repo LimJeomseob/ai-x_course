@@ -63,6 +63,17 @@ STEPS = [
             "from public.workshops where round = 3;",
         ],
     },
+    {
+        "src": "0006_video_lms.sql",
+        "out": "step6_video_lms.sql",
+        "title": "동영상 강의(LMS) — 차시·시청 기록 테이블, 동영상 세션(8차)·차시 4편",
+        "check": [
+            "select",
+            "  (select count(*) from public.workshops where delivery = 'video') as 동영상세션_기대값_1,",
+            "  (select count(*) from public.video_lessons) as 차시_기대값_4,",
+            "  (select count(*) from public.video_lessons where youtube_id is null) as 영상ID_미등록_차시수;",
+        ],
+    },
 ]
 
 for i, step in enumerate(STEPS, start=1):

@@ -52,6 +52,12 @@ export async function issueCertificateForApplication(
       throw new Error(rpcError?.message ?? "수료증 발급에 실패했습니다.");
     }
 
+    let completedAt: string | null = null;
+    if (application.workshop.delivery === "video") {
+      const { data: done } = await supabase.rpc("video_course_completed_at", { p_application_id: applicationId });
+      completedAt = typeof done === "string" ? done : null;
+    }
+
     const values = buildCertificateValues({
       certNo: cert.cert_no,
       name: application.name,
@@ -61,6 +67,8 @@ export async function issueCertificateForApplication(
       startAt: application.workshop.start_at,
       endAt: application.workshop.end_at,
       issuedAt: cert.issued_at, // 재발급도 최초 발급일 유지(PRD §8)
+      delivery: application.workshop.delivery,
+      completedAt,
     });
     const pdfBytes = await renderCertificateFromTemplate(resolvedTemplate, values);
 

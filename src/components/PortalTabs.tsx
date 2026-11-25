@@ -8,6 +8,7 @@ const TABS = [
   { href: "/", label: "소개" },
   { href: "/apply", label: "신청" },
   { href: "/lookup", label: "신청내역조회" },
+  { href: "/video", label: "동영상 강의" },
   { href: "/survey", label: "만족도조사" },
   { href: "/certificate", label: "수료증 발급" },
 ];

@@ -9,7 +9,7 @@ import { StatusBadge } from "@/components/ui/StatusBadge";
 import { publicPost } from "@/lib/adminApi";
 import { buildCertificateValues, renderCertificateFromTemplate } from "@/lib/certificatePdf";
 import { CERTIFICATES_BUCKET } from "@/lib/db-tables";
-import { formatTimeRange } from "@/lib/format";
+import { formatSessionTime } from "@/lib/format";
 import { downloadPdf } from "@/lib/issueCertificate";
 import { groupLookupByDay } from "@/lib/lookup";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -61,6 +61,8 @@ export function CertificateIssueForm() {
         startAt: issued.startAt,
         endAt: issued.endAt,
         issuedAt: issued.issuedAt,
+        delivery: issued.delivery,
+        completedAt: issued.completedAt,
       });
       const bytes = await renderCertificateFromTemplate(issued.template, values);
 
@@ -138,7 +140,7 @@ export function CertificateIssueForm() {
                     <li key={item.applicationId} className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
                       <div className="min-w-0">
                         <p className="font-semibold text-slate-900">
-                          {item.roundLabel} {formatTimeRange(item.startAt, item.endAt)} · {item.topic}
+                          {item.roundLabel} {formatSessionTime(item.startAt, item.endAt, item.delivery)} · {item.topic}
                         </p>
                         <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-slate-600">
                           <StatusBadge status={item.status} />
@@ -158,7 +160,9 @@ export function CertificateIssueForm() {
                           {busy[item.applicationId] ? "생성 중..." : item.certNo ? "재발급(PDF)" : "수료증 발급(PDF)"}
                         </Button>
                       ) : (
-                        <span className="text-xs text-slate-400">이수 처리 후 발급 가능</span>
+                        <span className="text-xs text-slate-400">
+                          {item.delivery === "video" ? "동영상 강의 전 차시 이수 후 발급 가능" : "이수 처리 후 발급 가능"}
+                        </span>
                       )}
                     </li>
                   );

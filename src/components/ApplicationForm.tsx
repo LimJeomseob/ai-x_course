@@ -9,7 +9,7 @@ import { FormField, inputBaseClass } from "@/components/ui/FormField";
 import { LocationLink } from "@/components/LocationLink";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { AXIS_OPTIONS } from "@/lib/constants";
-import { formatPhoneInput, formatTimeRange } from "@/lib/format";
+import { formatPhoneInput, formatSessionTime } from "@/lib/format";
 import { applicationSchema, fieldErrors } from "@/lib/validation";
 import {
   deriveSessionStatus,
@@ -226,7 +226,7 @@ export function ApplicationForm() {
                           onChange={() => toggle(s.id)}
                         />
                         <span>
-                          <strong>{s.round_label}</strong> {formatTimeRange(s.start_at, s.end_at)} · {s.topic}{" "}
+                          <strong>{s.round_label}</strong> {formatSessionTime(s.start_at, s.end_at, s.delivery)} · {s.topic}{" "}
                           <span className={clsx("font-semibold", disabled ? "" : "text-accent")}>{statusSuffix(status)}</span>
                         </span>
                       </label>
@@ -399,12 +399,21 @@ function ApplyResult({
               return (
                 <li key={r.workshop_id}>
                   ✔ {info?.day.day_label} {r.round_label}{" "}
-                  {info ? formatTimeRange(info.session.start_at, info.session.end_at) : ""} · {r.topic}
+                  {info ? formatSessionTime(info.session.start_at, info.session.end_at, info.session.delivery) : ""} · {r.topic}
                 </li>
               );
             })}
           </ul>
           <p className="mt-3 text-sm text-emerald-800">신청 결과 안내 메일은 매일 18:00에 일괄 발송됩니다.</p>
+          {succeeded.some((r) => sessionById.get(r.workshop_id)?.session.delivery === "video") && (
+            <p className="mt-1 text-sm font-medium text-emerald-900">
+              동영상 강의는 안내 메일 없이 지금 바로{" "}
+              <Link href="/video" className="underline underline-offset-2">
+                「동영상 강의」 탭
+              </Link>
+              에서 같은 성명·연락처로 수강할 수 있습니다.
+            </p>
+          )}
         </div>
       ) : (
         <div className="rounded-2xl border border-red-200 bg-red-50 p-6">

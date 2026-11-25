@@ -26,6 +26,7 @@ interface Row {
     topic: string;
     start_at: string;
     end_at: string;
+    delivery: "live" | "video";
     day: { day_code: string; day_label: string; location: string; location_url: string | null; is_online: boolean };
   } | null;
 }
@@ -41,7 +42,7 @@ export async function POST(req: Request) {
   const { data, error } = await db
     .from("applications")
     .select(
-      "id, phone, status, workshop:workshops(round, round_label, topic, start_at, end_at, day:workshop_days(day_code, day_label, location, location_url, is_online))"
+      "id, phone, status, workshop:workshops(round, round_label, topic, start_at, end_at, delivery, day:workshop_days(day_code, day_label, location, location_url, is_online))"
     )
     .eq("name", name)
     .eq("phone_digits", digits)
@@ -89,6 +90,7 @@ export async function POST(req: Request) {
         status: row.status,
         certNo: cert?.cert_no ?? null,
         certDownloadUrl,
+        delivery: w.delivery,
       };
     })
   );
